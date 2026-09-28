@@ -27,7 +27,7 @@ export default function Monitoring({ patients, readings }) {
         <div>
           <p className="eyebrow">LIVE MONITORING</p>
           <h1>Latest stored readings</h1>
-          <p className="subtle">Latest stored readings - not a live stream.</p>
+          <p className="subtle">Live updates while connected; otherwise latest stored readings.</p>
         </div>
       </div>
       <div className="v-monitor-list">
