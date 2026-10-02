@@ -11,6 +11,7 @@ import AiInsights from './views/AiInsights';
 import About from './views/About';
 import Users from './views/Users';
 import History from './views/History';
+import Thresholds from './views/Thresholds';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api'
@@ -151,6 +152,9 @@ function App() {
     if (session && hash === '#/users' && currentUser?.role !== 'admin') {
       setHash('#/');
     }
+    if (session && hash === '#/thresholds' && currentUser?.role !== 'admin') {
+      setHash('#/');
+    }
   }, [session, hash, currentUser?.role]);
 
   useEffect(() => {
@@ -272,7 +276,7 @@ function App() {
 
   const { patients, alerts, readings, user } = dashboard;
   const stableCount = patients.filter((patient) => patient.status === 'Stable').length;
-  const currentRoute = ['#/', '#/patients', '#/monitoring', '#/history', '#/alerts', '#/ai', '#/about', '#/users'].includes(hash) ? hash : '#/';
+  const currentRoute = ['#/', '#/patients', '#/monitoring', '#/history', '#/alerts', '#/ai', '#/about', '#/users', '#/thresholds'].includes(hash) ? hash : '#/';
   const openAlerts = alerts.filter((alert) => alert.status === 'open');
   const trendPatient = patients[0];
   const trendReadings = trendPatient ? readings[trendPatient.patientId] || [] : [];
@@ -283,6 +287,24 @@ function App() {
       ...currentDashboard,
       alerts: currentDashboard.alerts.map((alert) => alert.id === acknowledgedAlert.id ? acknowledgedAlert : alert)
     } : currentDashboard);
+  };
+
+  const handleAddPatient = async (payload) => {
+    const { data: patient } = await api.post('/patients', payload);
+    setDashboard((currentDashboard) => currentDashboard ? {
+      ...currentDashboard,
+      patients: [...currentDashboard.patients, patient]
+    } : currentDashboard);
+    return patient;
+  };
+
+  const handleUpdatePatient = async (patientId, payload) => {
+    const { data: patient } = await api.patch(`/patients/${patientId}`, payload);
+    setDashboard((currentDashboard) => currentDashboard ? {
+      ...currentDashboard,
+      patients: currentDashboard.patients.map((existingPatient) => existingPatient.patientId === patientId ? patient : existingPatient)
+    } : currentDashboard);
+    return patient;
   };
 
   return (
@@ -300,6 +322,7 @@ function App() {
           <a href="#/ai" className={currentRoute === '#/ai' ? 'active' : ''}>AI insights <b>✦</b></a>
           <a href="#/about" className={currentRoute === '#/about' ? 'active' : ''}>About</a>
           {currentUser?.role === 'admin' && <a href="#/users" className={currentRoute === '#/users' ? 'active' : ''}>Team</a>}
+          {currentUser?.role === 'admin' && <a href="#/thresholds" className={currentRoute === '#/thresholds' ? 'active' : ''}>Thresholds</a>}
         </nav>
         <div className="user">
           <div className="avatar">{(user?.name || 'PS').split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
@@ -378,13 +401,14 @@ function App() {
           </div>
           <footer><span>● System operational</span><span>Data loaded from backend · Last sync {formatTime(new Date())}</span></footer>
         </>}
-        {currentRoute === '#/patients' && <Patients patients={patients} readings={readings} alerts={alerts} />}
+        {currentRoute === '#/patients' && <Patients patients={patients} readings={readings} alerts={alerts} currentUserRole={currentUser?.role} onAddPatient={handleAddPatient} onUpdatePatient={handleUpdatePatient} />}
         {currentRoute === '#/monitoring' && <Monitoring patients={patients} readings={readings} />}
         {currentRoute === '#/history' && <History patients={patients} readings={readings} />}
         {currentRoute === '#/alerts' && <Alerts alerts={alerts} onAcknowledge={acknowledgeAlert} />}
         {currentRoute === '#/ai' && <AiInsights />}
         {currentRoute === '#/about' && <About />}
         {currentRoute === '#/users' && <Users />}
+        {currentRoute === '#/thresholds' && <Thresholds api={api} />}
       </section>
     </main>
   );

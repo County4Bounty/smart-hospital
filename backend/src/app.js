@@ -1,8 +1,14 @@
 const express = require('express');
 const cors = require('cors');
-const { validateReading, detectAlerts, DEFAULT_THRESHOLDS } = require('./alertEngine');
+const {
+  validateReading,
+  detectAlerts,
+  getThresholdConfig,
+  refreshThresholdCache,
+  buildThresholdMapFromDocs
+} = require('./alertEngine');
 const { login, requireAuth, requireRole } = require('./auth');
-const { Patient, HealthReading, Alert, User } = require('./models');
+const { Patient, HealthReading, Alert, User, Threshold } = require('./models');
 
 function serializeReading(reading) {
   return { ...reading.toObject(), id: reading._id.toString() };
@@ -10,6 +16,14 @@ function serializeReading(reading) {
 
 function serializeAlert(alert) {
   return { ...alert.toObject(), id: alert._id.toString() };
+}
+
+function serializePatient(patient) {
+  return { ...patient.toObject(), id: patient._id.toString() };
+}
+
+function serializeThreshold(threshold) {
+  return { ...threshold.toObject(), id: threshold._id.toString() };
 }
 
 function createApp(io) {
@@ -24,6 +38,53 @@ function createApp(io) {
     return res.json(session);
   });
   app.get('/api/patients', requireAuth, async (_req, res) => res.json(await Patient.find().sort({ patientId: 1 }).lean()));
+  app.post('/api/patients', requireAuth, requireRole('admin'), async (req, res) => {
+    const { patientId, name, age, gender, roomNumber, assignedDoctor, status } = req.body || {};
+    const requiredFields = [patientId, name, age, gender, roomNumber, assignedDoctor, status];
+    if (requiredFields.some((value) => value === undefined || value === null || value === '')) {
+      return res.status(400).json({ message: 'Missing required patient fields' });
+    }
+
+    const exists = await Patient.exists({ patientId: String(patientId).trim() });
+    if (exists) return res.status(409).json({ message: 'Patient ID already exists' });
+
+    const patient = await Patient.create({
+      patientId: String(patientId).trim(),
+      name: String(name).trim(),
+      age: Number(age),
+      gender: String(gender).trim(),
+      roomNumber: String(roomNumber).trim(),
+      assignedDoctor: String(assignedDoctor).trim(),
+      status: String(status).trim()
+    });
+    io?.emit('patient.created', serializePatient(patient));
+    return res.status(201).json(serializePatient(patient));
+  });
+  app.patch('/api/patients/:patientId', requireAuth, requireRole('admin'), async (req, res) => {
+    const { patientId } = req.params;
+    const patient = await Patient.findOne({ patientId });
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
+
+    const allowedFields = ['patientId', 'name', 'age', 'gender', 'roomNumber', 'assignedDoctor', 'status'];
+    const updates = {};
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updates[field] = field === 'patientId' ? String(req.body[field]).trim() : req.body[field];
+      }
+    }
+
+    if (Object.keys(updates).length === 0) return res.status(400).json({ message: 'No patient fields provided' });
+
+    if (updates.patientId && updates.patientId !== patient.patientId) {
+      const duplicate = await Patient.exists({ patientId: updates.patientId });
+      if (duplicate) return res.status(409).json({ message: 'Patient ID already exists' });
+    }
+
+    Object.assign(patient, updates);
+    await patient.save();
+    io?.emit('patient.updated', serializePatient(patient));
+    return res.json(serializePatient(patient));
+  });
   app.get('/api/patients/:patientId', requireAuth, async (req, res) => {
     const patient = await Patient.findOne({ patientId: req.params.patientId }).lean();
     if (!patient) return res.status(404).json({ message: 'Patient not found' });
@@ -45,7 +106,29 @@ function createApp(io) {
     const users = await User.find({}).select('name email role').sort({ name: 1 }).lean();
     return res.json(users.map((user) => ({ id: user._id.toString(), name: user.name, email: user.email, role: user.role })));
   });
-  app.get('/api/config/thresholds', requireAuth, (_req, res) => res.json(DEFAULT_THRESHOLDS));
+  app.get('/api/thresholds', requireAuth, async (_req, res) => {
+    const thresholds = await Threshold.find({}).sort({ key: 1 }).lean();
+    return res.json(thresholds.map((threshold) => ({ ...threshold, id: threshold._id.toString() })));
+  });
+  app.patch('/api/thresholds/:key', requireAuth, requireRole('admin'), async (req, res) => {
+    const { key } = req.params;
+    const value = Number(req.body.value);
+    if (!Number.isFinite(value) || value < 0) {
+      return res.status(400).json({ message: 'Threshold value must be a non-negative number.' });
+    }
+
+    const threshold = await Threshold.findOne({ key });
+    if (!threshold) return res.status(404).json({ message: 'Threshold not found' });
+
+    threshold.value = value;
+    await threshold.save();
+
+    const thresholds = await Threshold.find({}).sort({ key: 1 }).lean();
+    refreshThresholdCache(buildThresholdMapFromDocs(thresholds));
+
+    return res.json(serializeThreshold(threshold));
+  });
+  app.get('/api/config/thresholds', requireAuth, (_req, res) => res.json(getThresholdConfig()));
   app.post('/api/readings', requireAuth, async (req, res) => {
     const { patientId, heartRate, spo2, temperature, timestamp } = req.body;
     const patient = await Patient.findOne({ patientId });

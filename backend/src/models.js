@@ -36,9 +36,18 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['admin', 'doctor', 'nurse'], required: true }
 }, { timestamps: true });
 
+const thresholdSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true },
+  label: { type: String, required: true },
+  value: { type: Number, required: true },
+  direction: { type: String, enum: ['above', 'below'], required: true },
+  unit: { type: String, required: true }
+}, { timestamps: true });
+
 module.exports = {
   Patient: mongoose.models.Patient || mongoose.model('Patient', patientSchema),
   HealthReading: mongoose.models.HealthReading || mongoose.model('HealthReading', healthReadingSchema),
   Alert: mongoose.models.Alert || mongoose.model('Alert', alertSchema),
-  User: mongoose.models.User || mongoose.model('User', userSchema)
+  User: mongoose.models.User || mongoose.model('User', userSchema),
+  Threshold: mongoose.models.Threshold || mongoose.model('Threshold', thresholdSchema)
 };

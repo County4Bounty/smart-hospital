@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { mongoUri } = require('./config');
-const { Patient } = require('./models');
+const { DEFAULT_THRESHOLD_DOCS, buildThresholdMapFromDocs, refreshThresholdCache } = require('./alertEngine');
+const { Patient, Threshold } = require('./models');
 
 const defaultPatients = [
   { patientId: 'P-1001', name: 'Aarav Mehta', age: 64, gender: 'Male', roomNumber: 'ICU-04', assignedDoctor: 'Dr. Priya Shah', status: 'Critical' },
@@ -13,11 +14,23 @@ async function seedPatients() {
   await Patient.insertMany(defaultPatients);
 }
 
+async function seedThresholds() {
+  if (await Threshold.exists()) {
+    const existingThresholds = await Threshold.find({}).lean();
+    refreshThresholdCache(buildThresholdMapFromDocs(existingThresholds));
+    return;
+  }
+
+  const insertedThresholds = await Threshold.insertMany(DEFAULT_THRESHOLD_DOCS);
+  refreshThresholdCache(buildThresholdMapFromDocs(insertedThresholds));
+}
+
 async function connectDatabase() {
   if (!mongoUri) return false;
   try {
     await mongoose.connect(mongoUri);
     await seedPatients();
+    await seedThresholds();
     console.log('MongoDB connected');
     return true;
   } catch (error) {
