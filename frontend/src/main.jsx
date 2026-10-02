@@ -10,6 +10,7 @@ import Alerts from './views/Alerts';
 import AiInsights from './views/AiInsights';
 import About from './views/About';
 import Users from './views/Users';
+import History from './views/History';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api'
@@ -271,7 +272,7 @@ function App() {
 
   const { patients, alerts, readings, user } = dashboard;
   const stableCount = patients.filter((patient) => patient.status === 'Stable').length;
-  const currentRoute = ['#/', '#/patients', '#/monitoring', '#/alerts', '#/ai', '#/about', '#/users'].includes(hash) ? hash : '#/';
+  const currentRoute = ['#/', '#/patients', '#/monitoring', '#/history', '#/alerts', '#/ai', '#/about', '#/users'].includes(hash) ? hash : '#/';
   const openAlerts = alerts.filter((alert) => alert.status === 'open');
   const trendPatient = patients[0];
   const trendReadings = trendPatient ? readings[trendPatient.patientId] || [] : [];
@@ -294,6 +295,7 @@ function App() {
           <a href="#/" className={currentRoute === '#/' ? 'active' : ''}>Overview <b>⌂</b></a>
           <a href="#/patients" className={currentRoute === '#/patients' ? 'active' : ''}>Patients <b>{String(patients.length).padStart(2, '0')}</b></a>
           <a href="#/monitoring" className={currentRoute === '#/monitoring' ? 'active' : ''}>Live monitoring <b>●</b></a>
+          <a href="#/history" className={currentRoute === '#/history' ? 'active' : ''}>History</a>
           <a href="#/alerts" className={currentRoute === '#/alerts' ? 'active' : ''}>Alerts <b className="alert-count">{String(openAlerts.length).padStart(2, '0')}</b></a>
           <a href="#/ai" className={currentRoute === '#/ai' ? 'active' : ''}>AI insights <b>✦</b></a>
           <a href="#/about" className={currentRoute === '#/about' ? 'active' : ''}>About</a>
@@ -378,6 +380,7 @@ function App() {
         </>}
         {currentRoute === '#/patients' && <Patients patients={patients} readings={readings} alerts={alerts} />}
         {currentRoute === '#/monitoring' && <Monitoring patients={patients} readings={readings} />}
+        {currentRoute === '#/history' && <History patients={patients} readings={readings} />}
         {currentRoute === '#/alerts' && <Alerts alerts={alerts} onAcknowledge={acknowledgeAlert} />}
         {currentRoute === '#/ai' && <AiInsights />}
         {currentRoute === '#/about' && <About />}
