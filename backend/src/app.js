@@ -1,8 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const { validateReading, detectAlerts, DEFAULT_THRESHOLDS } = require('./alertEngine');
-const { login, requireAuth } = require('./auth');
-const { Patient, HealthReading, Alert } = require('./models');
+const { login, requireAuth, requireRole } = require('./auth');
+const { Patient, HealthReading, Alert, User } = require('./models');
 
 function serializeReading(reading) {
   return { ...reading.toObject(), id: reading._id.toString() };
@@ -40,6 +40,10 @@ function createApp(io) {
     const query = req.query.patientId ? { patientId: req.query.patientId } : {};
     const results = await Alert.find(query).sort({ timestamp: -1 });
     return res.json(results.map(serializeAlert));
+  });
+  app.get('/api/users', requireAuth, requireRole('admin'), async (_req, res) => {
+    const users = await User.find({}).select('name email role').sort({ name: 1 }).lean();
+    return res.json(users.map((user) => ({ id: user._id.toString(), name: user.name, email: user.email, role: user.role })));
   });
   app.get('/api/config/thresholds', requireAuth, (_req, res) => res.json(DEFAULT_THRESHOLDS));
   app.post('/api/readings', requireAuth, async (req, res) => {
