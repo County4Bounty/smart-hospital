@@ -20,6 +20,20 @@ const char* PATIENT_ID = "P-1001";
 MAX30105 max30102;
 unsigned long lastPost = 0;
 
+// Simple in-memory FIFO for failed readings. Entries are lost on power cycle/reset;
+// readings are not persisted to flash, which is accepted for this project's scope.
+struct PendingReading {
+  float heartRate;
+  float spo2;
+  float temperature;
+  unsigned long timestamp;
+};
+
+const size_t PENDING_READING_CAPACITY = 20;
+PendingReading pendingReadings[PENDING_READING_CAPACITY];
+size_t pendingReadingHead = 0;
+size_t pendingReadingCount = 0;
+
 float readTemperatureC() {
 #if USE_MOCK_SENSORS
   const bool abnormal = (millis() % 30000UL) >= 25000UL;
@@ -45,21 +59,64 @@ bool validReading(float heartRate, float spo2, float temperature) {
   return heartRate >= 20 && heartRate <= 240 && spo2 >= 50 && spo2 <= 100 && temperature >= 25 && temperature <= 45;
 }
 
-void postReading(float heartRate, float spo2, float temperature) {
-  if (WiFi.status() != WL_CONNECTED || !validReading(heartRate, spo2, temperature)) return;
+void bufferReading(float heartRate, float spo2, float temperature, unsigned long timestamp) {
+  if (pendingReadingCount == PENDING_READING_CAPACITY) {
+    pendingReadingHead = (pendingReadingHead + 1) % PENDING_READING_CAPACITY;
+    pendingReadingCount--;
+    Serial.println("Reading dropped: pending buffer full");
+  }
+
+  const size_t insertIndex = (pendingReadingHead + pendingReadingCount) % PENDING_READING_CAPACITY;
+  pendingReadings[insertIndex] = { heartRate, spo2, temperature, timestamp };
+  pendingReadingCount++;
+  Serial.print("Reading buffered (pending=");
+  Serial.print(pendingReadingCount);
+  Serial.println(")");
+}
+
+bool postReadingToBackend(float heartRate, float spo2, float temperature) {
+  if (WiFi.status() != WL_CONNECTED) return false;
+  if (!validReading(heartRate, spo2, temperature)) return true;
   HTTPClient http;
   http.begin(API_URL);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Authorization", String("Bearer ") + API_TOKEN);
   String body = String("{\"patientId\":\"") + PATIENT_ID + "\",\"heartRate\":" + heartRate + ",\"spo2\":" + spo2 + ",\"temperature\":" + temperature + "}";
   const int responseCode = http.POST(body);
+  const bool requestSucceeded = responseCode >= 200 && responseCode < 300;
   Serial.print("HTTP POST ");
-  Serial.print((responseCode == 200 || responseCode == 201) ? "success: " : "failure: ");
+  Serial.print(requestSucceeded ? "success: " : "failure: ");
   Serial.print(responseCode);
   Serial.print(" (");
   Serial.print(http.errorToString(responseCode).c_str());
   Serial.println(")");
   http.end();
+  return requestSucceeded;
+}
+
+void postReading(float heartRate, float spo2, float temperature) {
+  const unsigned long timestamp = millis();
+  if (!postReadingToBackend(heartRate, spo2, temperature)) {
+    bufferReading(heartRate, spo2, temperature, timestamp);
+  }
+}
+
+void flushBufferedReadings() {
+  while (pendingReadingCount > 0) {
+    const PendingReading& pending = pendingReadings[pendingReadingHead];
+    Serial.print("Flush attempt for buffered reading (pending=");
+    Serial.print(pendingReadingCount);
+    Serial.println(")");
+
+    if (!postReadingToBackend(pending.heartRate, pending.spo2, pending.temperature)) {
+      Serial.println("Buffered reading flush failed; retrying next cycle");
+      return;
+    }
+
+    Serial.println("Buffered reading flush succeeded");
+    pendingReadingHead = (pendingReadingHead + 1) % PENDING_READING_CAPACITY;
+    pendingReadingCount--;
+  }
 }
 
 void setup() {
@@ -80,6 +137,7 @@ void setup() {
 void loop() {
   if (millis() - lastPost < 5000) return;
   lastPost = millis();
+  flushBufferedReadings();
   // Replace these placeholders with MAX30102 algorithm output after sensor calibration.
   float heartRate;
   float spo2;
