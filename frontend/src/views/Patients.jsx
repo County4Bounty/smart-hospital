@@ -63,7 +63,7 @@ export default function Patients({ patients, readings, alerts, currentUserRole, 
         status: String(formValues.status).trim()
       };
 
-      if (!payload.patientId || !payload.name || !payload.age || !payload.gender || !payload.roomNumber || !payload.assignedDoctor || !payload.status) {
+      if (!payload.patientId || !payload.name || formValues.age === '' || formValues.age === null || formValues.age === undefined || Number.isNaN(Number(formValues.age)) || !payload.gender || !payload.roomNumber || !payload.assignedDoctor || !payload.status) {
         throw new Error('All fields are required.');
       }
 
