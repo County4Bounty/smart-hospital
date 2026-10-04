@@ -12,6 +12,7 @@ import About from './views/About';
 import Users from './views/Users';
 import History from './views/History';
 import Thresholds from './views/Thresholds';
+import Devices from './views/Devices';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api'
@@ -155,6 +156,9 @@ function App() {
     if (session && hash === '#/thresholds' && currentUser?.role !== 'admin') {
       setHash('#/');
     }
+    if (session && hash === '#/devices' && currentUser?.role !== 'admin') {
+      setHash('#/');
+    }
   }, [session, hash, currentUser?.role]);
 
   useEffect(() => {
@@ -276,7 +280,7 @@ function App() {
 
   const { patients, alerts, readings, user } = dashboard;
   const stableCount = patients.filter((patient) => patient.status === 'Stable').length;
-  const currentRoute = ['#/', '#/patients', '#/monitoring', '#/history', '#/alerts', '#/ai', '#/about', '#/users', '#/thresholds'].includes(hash) ? hash : '#/';
+  const currentRoute = ['#/', '#/patients', '#/monitoring', '#/history', '#/alerts', '#/ai', '#/about', '#/users', '#/thresholds', '#/devices'].includes(hash) ? hash : '#/';
   const openAlerts = alerts.filter((alert) => alert.status === 'open');
   const trendPatient = patients[0];
   const trendReadings = trendPatient ? readings[trendPatient.patientId] || [] : [];
@@ -323,6 +327,7 @@ function App() {
           <a href="#/about" className={currentRoute === '#/about' ? 'active' : ''}>About</a>
           {currentUser?.role === 'admin' && <a href="#/users" className={currentRoute === '#/users' ? 'active' : ''}>Team</a>}
           {currentUser?.role === 'admin' && <a href="#/thresholds" className={currentRoute === '#/thresholds' ? 'active' : ''}>Thresholds</a>}
+          {currentUser?.role === 'admin' && <a href="#/devices" className={currentRoute === '#/devices' ? 'active' : ''}>Devices</a>}
         </nav>
         <div className="user">
           <div className="avatar">{(user?.name || 'PS').split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
@@ -403,12 +408,13 @@ function App() {
         </>}
         {currentRoute === '#/patients' && <Patients patients={patients} readings={readings} alerts={alerts} currentUserRole={currentUser?.role} onAddPatient={handleAddPatient} onUpdatePatient={handleUpdatePatient} />}
         {currentRoute === '#/monitoring' && <Monitoring patients={patients} readings={readings} />}
-        {currentRoute === '#/history' && <History patients={patients} readings={readings} />}
+        {currentRoute === '#/history' && <History api={api} patients={patients} />}
         {currentRoute === '#/alerts' && <Alerts alerts={alerts} onAcknowledge={acknowledgeAlert} />}
         {currentRoute === '#/ai' && <AiInsights />}
         {currentRoute === '#/about' && <About />}
         {currentRoute === '#/users' && <Users />}
         {currentRoute === '#/thresholds' && <Thresholds api={api} />}
+        {currentRoute === '#/devices' && <Devices api={api} patients={patients} />}
       </section>
     </main>
   );

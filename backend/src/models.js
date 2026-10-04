@@ -44,10 +44,18 @@ const thresholdSchema = new mongoose.Schema({
   unit: { type: String, required: true }
 }, { timestamps: true });
 
+const deviceSchema = new mongoose.Schema({
+  deviceId: { type: String, required: true, unique: true, trim: true },
+  label: { type: String, required: true, trim: true },
+  assignedPatientId: { type: String, ref: 'Patient', default: null },
+  lastSeenAt: { type: Date, default: null }
+}, { timestamps: true });
+
 module.exports = {
   Patient: mongoose.models.Patient || mongoose.model('Patient', patientSchema),
   HealthReading: mongoose.models.HealthReading || mongoose.model('HealthReading', healthReadingSchema),
   Alert: mongoose.models.Alert || mongoose.model('Alert', alertSchema),
   User: mongoose.models.User || mongoose.model('User', userSchema),
-  Threshold: mongoose.models.Threshold || mongoose.model('Threshold', thresholdSchema)
+  Threshold: mongoose.models.Threshold || mongoose.model('Threshold', thresholdSchema),
+  Device: mongoose.models.Device || mongoose.model('Device', deviceSchema)
 };
