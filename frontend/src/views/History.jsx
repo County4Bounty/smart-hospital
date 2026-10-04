@@ -63,7 +63,7 @@ export default function History({ api, patients }) {
           data: heartRate,
           borderColor: '#d95f5a',
           backgroundColor: 'rgba(217, 95, 90, 0.12)',
-          yAxisID: 'yVitals',
+          yAxisID: 'yHeartRate',
           tension: 0.3,
           pointRadius: 2,
           fill: false
@@ -73,7 +73,7 @@ export default function History({ api, patients }) {
           data: spo2,
           borderColor: '#2e7a6b',
           backgroundColor: 'rgba(46, 122, 107, 0.12)',
-          yAxisID: 'yVitals',
+          yAxisID: 'ySpo2',
           tension: 0.3,
           pointRadius: 2,
           fill: false
@@ -105,16 +105,26 @@ export default function History({ api, patients }) {
         ticks: { maxTicksLimit: 8 },
         grid: { color: 'rgba(25, 37, 40, 0.06)' }
       },
-      yVitals: {
-        beginAtZero: false,
+      yHeartRate: {
+        min: 40,
+        max: 180,
         position: 'left',
-        title: { display: true, text: 'Heart rate / SpO2' },
+        title: { display: true, text: 'Heart rate (bpm)' },
         grid: { color: 'rgba(25, 37, 40, 0.06)' }
       },
-      yTemperature: {
-        beginAtZero: false,
+      ySpo2: {
+        min: 70,
+        max: 100,
         position: 'right',
-        title: { display: true, text: 'Temperature (C)' },
+        title: { display: true, text: 'SpO2 (%)' },
+        grid: { drawOnChartArea: false }
+      },
+      yTemperature: {
+        min: 34,
+        max: 42,
+        position: 'right',
+        offset: true,
+        title: { display: true, text: 'Temperature (°C)' },
         grid: { drawOnChartArea: false }
       }
     }
