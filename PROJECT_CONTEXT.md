@@ -73,6 +73,7 @@ The project is an academic prototype and is **not a certified medical device**.
                     │ Sensor acquisition      │
                     │ Validation              │
                     │ Mock mode               │
+                    │ Offline buffering/retry │
                     │ Wi-Fi communication     │
                     └────────────┬────────────┘
                                  │
@@ -86,6 +87,7 @@ The project is an academic prototype and is **not a certified medical device**.
                     │ JWT Authentication     │
                     │ Validation              │
                     │ Deterministic Alerts    │
+                    │ Device registry/status  │
                     │ Socket.IO               │
                     └──────────┬─────┬────────┘
                                │     │
@@ -98,6 +100,7 @@ The project is an academic prototype and is **not a certified medical device**.
                     │ Readings        │    │ events         │
                     │ Alerts          │    └───────┬────────┘
                     │ Users           │            │
+                    │ Devices         │            │
                     └─────────────────┘            │
                                                   ▼
                                       ┌────────────────────┐
@@ -106,7 +109,8 @@ The project is an academic prototype and is **not a certified medical device**.
                                       │ Patients           │
                                       │ Vitals             │
                                       │ Alerts             │
-                                      │ History            │
+                                      │ History (charts)   │
+                                      │ Devices (admin)    │
                                       └─────────┬──────────┘
                                                 │
                                                 ▼
@@ -133,6 +137,7 @@ Responsibilities:
 * Perform basic validation.
 * Connect to Wi-Fi.
 * Send readings to the backend.
+* Buffer readings locally and retry when the backend/Wi-Fi is unreachable.
 * Provide diagnostic information.
 * Support mock-sensor mode when physical hardware is unavailable.
 
@@ -205,6 +210,10 @@ This mock mode is intended for:
 
 It must not be represented as actual sensor measurement.
 
+### Multi-patient mock data generator
+
+`backend/scripts/mock-multi-patient.js` posts simulated readings for several patients (`P-1001`, `P-1002`, `P-1003`) on independent timers, without requiring Wokwi or physical hardware. Each patient has its own staggered abnormal-window cycle so they don't all spike together. It includes a `deviceId` (`ESP32-<patientId>`) in each posted reading so matching registered devices flip to "online" with a live last-seen time.
+
 ---
 
 # 6. Wokwi Simulation
@@ -217,6 +226,7 @@ The simulation uses:
 * Arduino/C++
 * Wokwi simulated Wi-Fi
 * Mock sensor mode
+* Offline buffering/retry (see §12a)
 
 Wokwi provides simulated internet connectivity, allowing the simulated ESP32 to communicate with the actual local backend through a temporary tunnel.
 
@@ -245,6 +255,7 @@ The backend:
 * Stores readings.
 * Manages patients.
 * Manages alerts.
+* Manages registered devices and their online/offline status.
 * Authenticates users.
 * Provides protected API routes.
 * Generates deterministic threshold alerts.
@@ -330,7 +341,14 @@ Existing Mongoose models cover:
 * Acknowledgement timestamp
 * Timestamp
 
-MongoDB is now used as the persistent storage layer for patients, readings and alerts.
+### Devices
+
+* Device ID (unique)
+* Label
+* Assigned patient ID (optional)
+* Last-seen timestamp (used to derive online/offline status; online if seen within the last 2 minutes)
+
+MongoDB is now used as the persistent storage layer for patients, readings, alerts and devices.
 
 The previous in-memory `store.js` approach has been removed.
 
@@ -351,39 +369,24 @@ This behavior has been verified.
 
 # 11. Authentication
 
-The backend currently uses:
+The backend uses:
 
 * JWT authentication
 * bcrypt password handling
 
 The backend login endpoint has been verified successfully.
 
-## Current frontend authentication limitation
+## Frontend authentication and role enforcement — Implemented
 
-The frontend currently does **not** have a real login screen.
+`frontend/src/main.jsx` implements a real login/logout flow on top of the existing hash-based router (no `react-router-dom` — deliberately kept on the existing lightweight pattern to avoid introducing a new routing dependency under time pressure):
 
-Instead:
+* A real login form submits to the existing `POST /api/auth/login` via the shared `api` client — no environment-credential auto-login remains.
+* The session/JWT is restored from `localStorage` on load, so a refresh does not log the user out.
+* A hash-based route guard redirects an unauthenticated visitor to `#/login` regardless of what hash is requested, and redirects an already-authenticated visitor away from `#/login`.
+* Role-gated routes (`#/thresholds`, `#/devices`, and admin-only nav links such as Team/Thresholds/Devices) redirect non-admins even on **direct hash navigation**, not just hidden nav links — confirmed by manually typing an admin route into the hash while logged in as a non-admin.
+* Logout clears the stored session and redirects to `#/login`; a refresh afterward does not silently log back in.
 
-* It automatically logs in using environment-configured credentials.
-* The JWT is stored in `localStorage`.
-* There is currently no frontend login form.
-* There is currently no logout UI.
-* There is currently no frontend router/auth guard.
-
-This is acceptable for the current local development/demo stage but is not the intended final authentication design.
-
-### Planned future authentication work
-
-1. Add `react-router-dom`.
-2. Add `/login`.
-3. Add a real login form.
-4. Add authentication guard.
-5. Remove automatic environment-based login.
-6. Add logout.
-7. Implement Admin/Doctor/Nurse role enforcement.
-8. Test multiple roles.
-
-Do not implement this unless it is selected as the next development task.
+Manually verified end-to-end: fresh load → login form, non-admin login → admin nav hidden, direct hash navigation to an admin route as non-admin → redirected, refresh while logged in → session persists, logout → session cleared and does not silently restore.
 
 ---
 
@@ -415,6 +418,23 @@ AI must not replace emergency/threshold alert generation.
 
 ---
 
+# 12a. ESP32 Offline Buffering
+
+Implemented: a fixed-size (20-entry) in-memory FIFO ring buffer on the ESP32.
+
+Behavior:
+
+* A reading is buffered if the POST fails (non-2xx response) or if `WiFi.status() != WL_CONNECTED` — the Wi-Fi check happens before attempting the HTTP request, so a dropped link buffers immediately rather than waiting on a doomed request to time out.
+* Before sending a new reading each cycle, the device first attempts to flush buffered readings oldest-first, removing each only on confirmed POST success.
+* If a flush attempt fails, flushing stops for that cycle (not blocking the new reading) and resumes next cycle.
+* If the buffer is full, the oldest entry is dropped (FIFO) and logged.
+* The buffer is in-memory only — lost on power cycle/reset, not persisted to flash. This is an accepted limitation for this project's scope.
+* All buffer/flush/drop events are logged to Serial for observability in the Wokwi Serial Monitor.
+
+This does not change the underlying request logic (headers, auth token, URL, JSON shape) — it only wraps the existing submission call.
+
+---
+
 # 13. React Frontend
 
 The frontend uses React.
@@ -426,6 +446,8 @@ The frontend currently loads:
 * Patients
 * Patient readings
 * Alerts
+* Patient history (range-filtered, charted — see §13a)
+* Devices (admin-only — see §13b)
 
 The existing visual design should be preserved when extending functionality.
 
@@ -445,6 +467,47 @@ The dashboard was subsequently verified as rendering correctly with seeded patie
 
 ---
 
+# 13a. Patient History + Chart.js
+
+Implemented in `frontend/src/views/History.jsx`, backed by an extended `GET /api/readings/:patientId` route.
+
+Backend:
+
+* Accepts `range` query param: `1h`, `6h`, `24h`, `7d` (default `24h`); invalid/missing values safely fall back to `24h`.
+* Filters readings by patient ID and the computed time window, sorted ascending (oldest first).
+* Caps the raw query at ~5000 rows, then evenly downsamples to at most 500 points across the full range (not just the first/last 500), so the chart reflects the whole window rather than being biased toward one end.
+* Auth/role scope unchanged (`requireAuth` only, same as before).
+
+Frontend:
+
+* Range selector (`1h`/`6h`/`24h`/`7d`) re-fetches on both patient and range change.
+* Chart.js line chart with **three independent, fixed-range axes** (not auto-scaled from data, so the chart reads consistently regardless of what the current data happens to span):
+  * `yHeartRate` — left, 40–180 bpm
+  * `ySpo2` — right, 70–100%
+  * `yTemperature` — right (offset to avoid overlapping `ySpo2`), 34–42°C
+* Only the heart-rate axis draws gridlines, to avoid clutter.
+* Empty state ("No data for this period") when a patient/range has no readings.
+* Uses the existing shared authenticated `api` client — no separate fetch path.
+
+---
+
+# 13b. Device Management (Admin-only)
+
+Implemented in `frontend/src/views/Devices.jsx`, backed by new `/api/devices` routes.
+
+Backend:
+
+* `GET /api/devices` (`requireAuth`) — lists all devices with assigned patient name and a derived `status` (`online` if `lastSeenAt` within the last 2 minutes, else `offline`).
+* `POST /api/devices` (`requireRole('admin')`) — registers a new device (`deviceId`, `label`, optional `assignedPatientId`); rejects duplicate `deviceId` and unknown `assignedPatientId`.
+* `PATCH /api/devices/:deviceId` (`requireRole('admin')`) — updates `label` and/or `assignedPatientId`.
+* `POST /api/readings` now accepts an optional `deviceId` in the body and updates that device's `lastSeenAt` on receipt — this is how a device flips to "online".
+
+Frontend:
+
+* "Devices" nav link and `#/devices` route, visible/accessible to `admin` role only (non-admins are redirected to `#/`).
+
+---
+
 # 14. Backend ↔ Frontend Verification
 
 The frontend/backend integration has been verified.
@@ -457,6 +520,8 @@ The following have been confirmed:
 * Dashboard renders.
 * Seeded patient data appears.
 * Frontend production build succeeds.
+* Device registration/assignment and online-status flip (via `mock-multi-patient.js` sending `deviceId`) verified.
+* Patient history chart (range selector + three-axis Chart.js) verified against a build.
 
 ---
 
@@ -487,6 +552,8 @@ An abnormal mock reading successfully generated three backend alerts:
 | Temperature high |  38.6 |        38 | above     |
 
 This proves that the deterministic alert system works with sensor-shaped data flowing through the actual simulated IoT pipeline, backend and database.
+
+This has been confirmed for multiple simulated patient IDs (`P-1001`, `P-1002`).
 
 ---
 
@@ -550,6 +617,7 @@ It reports:
 * Generated temperature.
 * HTTP response code.
 * Decoded HTTP error information.
+* Offline buffer events: reading buffered, flush attempt success/failure, reading dropped (buffer full).
 
 This makes the Wokwi simulation observable through the Serial Monitor.
 
@@ -557,35 +625,36 @@ This makes the Wokwi simulation observable through the Serial Monitor.
 
 # 19. Current Verified Status
 
-| Component                            | Status                       |
-| ------------------------------------ | ---------------------------- |
-| MongoDB installation                 | ✅ Complete                   |
-| MongoDB connection                   | ✅ Verified                   |
-| Backend `.env`                       | ✅ Created                    |
-| Backend authentication               | ✅ Verified                   |
-| MongoDB persistence                  | ✅ Working                    |
-| Demo patient seeding                 | ✅ Verified                   |
-| React dashboard rendering            | ✅ Verified                   |
-| Frontend/backend integration         | ✅ Verified                   |
-| ESP32 firmware structure             | ✅ Implemented                |
-| Wokwi simulation                     | ✅ Working                    |
-| Mock sensor mode                     | ✅ Implemented                |
-| ESP32 → backend communication        | ✅ Verified                   |
-| Deterministic alerts                 | ✅ Verified end-to-end        |
-| MAX30102 physical reading            | 🟡 Pending physical hardware |
-| DHT11 support                        | ⬜ Incomplete                 |
-| ESP32 offline buffering              | ⬜ Not implemented            |
-| Full role enforcement                | ⬜ Not implemented            |
-| Patient management                   | ⬜ Incomplete                 |
-| User management                      | ⬜ Incomplete                 |
-| Device management                    | ⬜ Not implemented            |
-| Threshold management UI              | ⬜ Not implemented            |
-| Full patient history / charts        | ⬜ Not implemented            |
-| Full Socket.IO frontend verification | ⬜ Not implemented            |
-| Notification delivery                | ⬜ Not implemented            |
-| AI trend/risk analysis               | ⬜ Not implemented            |
-| AI traceability/disclaimer           | ⬜ Not implemented            |
-| Comprehensive testing                | ⬜ Not completed              |
+| Component                            | Status                                                             |
+| ------------------------------------- | ------------------------------------------------------------------- |
+| MongoDB installation                  | ✅ Complete                                                          |
+| MongoDB connection                    | ✅ Verified                                                          |
+| Backend `.env`                        | ✅ Created                                                           |
+| Backend authentication                | ✅ Verified                                                          |
+| MongoDB persistence                   | ✅ Working                                                           |
+| Demo patient seeding                  | ✅ Verified                                                          |
+| React dashboard rendering             | ✅ Verified                                                          |
+| Frontend/backend integration          | ✅ Verified                                                          |
+| ESP32 firmware structure              | ✅ Implemented                                                       |
+| Wokwi simulation                      | ✅ Working (verified for `P-1001` and `P-1002`)                      |
+| Mock sensor mode                      | ✅ Implemented                                                       |
+| Multi-patient mock generator          | ✅ Implemented (`mock-multi-patient.js`, P-1001/1002/1003)           |
+| ESP32 → backend communication         | ✅ Verified                                                          |
+| ESP32 offline buffering               | ✅ Implemented (§12a)                                                |
+| Deterministic alerts                  | ✅ Verified end-to-end (`P-1001`, `P-1002`)                          |
+| Device management                     | ✅ Implemented (§13b) — admin-only CRUD, online/offline status       |
+| Patient history / charts              | ✅ Implemented (§13a) — range-filtered, three-axis Chart.js          |
+| MAX30102 physical reading             | 🟡 Pending physical hardware                                        |
+| DHT11 support                         | ⬜ Incomplete                                                        |
+| Login/logout + role-gated routing     | ✅ Implemented and manually verified (§11)                           |
+| Patient management                    | 🟡 Add/update UI appears wired in `main.jsx` — completeness/edge cases not re-verified this session |
+| User management                       | 🟡 `Users` view exists — completeness not re-verified this session  |
+| Threshold management UI                | 🟡 `Thresholds` view exists and calls backend — completeness not re-verified this session |
+| Full Socket.IO frontend verification  | ⬜ Not implemented                                                   |
+| Notification delivery                 | ⬜ Not implemented                                                   |
+| AI trend/risk analysis                | ⬜ Not implemented                                                   |
+| AI traceability/disclaimer            | ⬜ Not implemented                                                   |
+| Comprehensive testing                 | ⬜ Not completed                                                     |
 
 ---
 
@@ -688,23 +757,22 @@ Do not arbitrarily introduce an LLM or machine-learning model without first defi
 
 # 23. Remaining Development Roadmap
 
-The remaining work should be approached incrementally.
+Completed since the original roadmap was written: ESP32 offline buffering, device management, patient history/chart visualization, and login/logout with role-gated routing (§11).
 
-Suggested order:
+**Timeline constraint:** under one week to submission/viva as of this writing — the order below is deliberately scaled down accordingly (no full-size AI pipeline; a small, honest, offline-trained model with lightweight Node-side inference instead of a live Python service).
 
-1. Improve authentication and role handling.
-2. Complete patient history and chart visualization.
-3. Verify/implement frontend real-time Socket.IO updates.
-4. Improve patient/device/threshold management.
-5. Complete ESP32 firmware behavior.
-6. Add offline buffering/retry behavior if required.
-7. Improve notification workflow.
-8. Expand automated tests.
-9. Design the AI data pipeline.
-10. Select and implement an appropriate AI/ML approach.
-11. Integrate AI insights into the dashboard.
-12. Perform complete system testing.
-13. Prepare final project documentation and presentation.
+Suggested remaining order:
+
+1. Verify/implement frontend real-time Socket.IO updates.
+2. Re-verify patient/user/threshold management completeness against actual requirements (currently only partially confirmed — see §19).
+3. Minimal notification workflow (visible dashboard alert → acknowledgement; no external SMS/WhatsApp).
+4. Automated integration tests for core endpoints (auth, readings, alerts, patient/device CRUD) — a regression safety net before AI work begins.
+5. Design AI features/data (from `mock-multi-patient.js`-style synthetic data, explicitly labeled as synthetic).
+6. Train + evaluate a small, explainable model (e.g. logistic regression / small decision tree) offline in Python/scikit-learn.
+7. Port the trained model's logic into the Node backend for inference — avoid a live cross-process Python service during the demo.
+8. AI Insights UI with traceability (risk, contributing factors, analysis window, model version, explicit "not a diagnosis" disclaimer).
+9. Full system testing pass: normal / abnormal / network-loss-buffering / AI-trend demo script.
+10. Documentation, slides, and demo rehearsal — treat this as its own day, not an afterthought.
 
 Do not skip directly to AI if a prerequisite data pipeline is unreliable.
 
@@ -827,6 +895,13 @@ Alerts
 React dashboard
 ```
 
-This end-to-end path has been demonstrated successfully.
+This end-to-end path has been demonstrated successfully, including for multiple simulated patients (`P-1001`, `P-1002`).
+
+Since this milestone, the following have been added on top of this verified foundation:
+
+* ESP32 offline buffering/retry (§12a).
+* Device registration and management, admin-only (§13b).
+* Patient history view with range-filtered, three-axis Chart.js charting (§13a).
+* A multi-patient mock data generator (`mock-multi-patient.js`) for exercising multiple patients without Wokwi/hardware.
 
 The next development work should build on this verified foundation rather than replacing it.
