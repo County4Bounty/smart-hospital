@@ -229,6 +229,7 @@ function createApp(io) {
       acknowledgedAt: new Date()
     }, { new: true });
     if (!alert) return res.status(404).json({ message: 'Alert not found' });
+    io?.emit('alert.acknowledged', serializeAlert(alert));
     return res.json(serializeAlert(alert));
   });
   return app;

@@ -244,6 +244,20 @@ function App() {
         return { ...currentDashboard, alerts: [alert, ...currentDashboard.alerts] };
       });
     });
+    socket.on('alert.acknowledged', (acknowledgedAlert) => {
+      setDashboard((currentDashboard) => {
+        if (!currentDashboard) return currentDashboard;
+        const alertId = acknowledgedAlert.id || acknowledgedAlert._id;
+        return {
+          ...currentDashboard,
+          alerts: currentDashboard.alerts.map((existingAlert) => (
+            (existingAlert.id || existingAlert._id) === alertId
+              ? { ...existingAlert, status: acknowledgedAlert.status, acknowledgedAt: acknowledgedAlert.acknowledgedAt }
+              : existingAlert
+          ))
+        };
+      });
+    });
 
     return () => {
       socket.disconnect();
