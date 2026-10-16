@@ -5,3 +5,9 @@ dist/
 !.env.example
 *.log
 .vscode/
+
+# Backend AI virtual environment
+/backend/ai/.venv/
+
+# Regenerable synthetic AI dataset
+/backend/ai/dataset.json
