@@ -23,3 +23,33 @@ test('extractFeatures requires a complete 12-reading window', () => {
   assert.equal(extractFeatures([]), null);
   assert.equal(extractFeatures(new Array(11).fill({ heartRate: 80, spo2: 98, temperature: 37 })), null);
 });
+
+test('returns stale when the newest reading is older than two minutes', () => {
+  const newestTimestamp = Date.now() - 121000;
+  const readings = Array.from({ length: 12 }, (_value, index) => ({
+    heartRate: 80,
+    spo2: 98,
+    temperature: 37,
+    timestamp: new Date(newestTimestamp - (11 - index) * 5000).toISOString()
+  }));
+
+  const analysis = analyzeRisk(readings);
+  assert.equal(analysis.status, 'stale');
+  assert.equal(analysis.riskLevel, null);
+  assert.equal(analysis.latestReadingAt, readings.at(-1).timestamp);
+  assert.ok(analysis.ageSeconds > 120);
+});
+
+test('returns insufficient_data when the recent window has a large timestamp gap', () => {
+  let timestamp = Date.now() - 111000;
+  const readings = Array.from({ length: 12 }, (_value, index) => {
+    const reading = { heartRate: 80, spo2: 98, temperature: 37, timestamp: new Date(timestamp).toISOString() };
+    timestamp += index === 6 ? 61000 : 5000;
+    return reading;
+  });
+
+  const analysis = analyzeRisk(readings);
+  assert.equal(analysis.status, 'insufficient_data');
+  assert.equal(analysis.reason, 'Recent readings are not continuous.');
+  assert.equal(analysis.riskLevel, null);
+});

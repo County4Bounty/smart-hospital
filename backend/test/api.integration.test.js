@@ -165,6 +165,46 @@ test('GET /api/ai/risk/:patientId rejects unauthenticated requests', async () =>
   assert.equal(response.status, 401);
 });
 
+test('GET /api/ai/risk/:patientId reports stale and non-continuous readings', async () => {
+  const stalePatient = await createTestPatient('P-AI-STALE-001');
+  const staleNewest = Date.now() - 121000;
+  await HealthReading.insertMany(Array.from({ length: 12 }, (_value, index) => ({
+    patientId: stalePatient.patientId,
+    heartRate: 80,
+    spo2: 98,
+    temperature: 37,
+    timestamp: new Date(staleNewest - (11 - index) * 5000)
+  })));
+
+  const stale = await request(`/api/ai/risk/${stalePatient.patientId}`, {
+    headers: authHeaders(adminToken)
+  });
+  assert.equal(stale.status, 200);
+  assert.equal(stale.body.status, 'stale');
+  assert.ok(stale.body.ageSeconds > 120);
+
+  const gapPatient = await createTestPatient('P-AI-GAP-001');
+  let timestamp = Date.now() - 111000;
+  await HealthReading.insertMany(Array.from({ length: 12 }, (_value, index) => {
+    const reading = {
+      patientId: gapPatient.patientId,
+      heartRate: 80,
+      spo2: 98,
+      temperature: 37,
+      timestamp: new Date(timestamp)
+    };
+    timestamp += index === 6 ? 61000 : 5000;
+    return reading;
+  }));
+
+  const gap = await request(`/api/ai/risk/${gapPatient.patientId}`, {
+    headers: authHeaders(adminToken)
+  });
+  assert.equal(gap.status, 200);
+  assert.equal(gap.body.status, 'insufficient_data');
+  assert.equal(gap.body.reason, 'Recent readings are not continuous.');
+});
+
 test('admin can create and update patients while non-admin is rejected', async () => {
   const patientPayload = {
     patientId: 'P-ADMIN-001',

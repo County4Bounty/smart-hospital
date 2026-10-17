@@ -1,6 +1,8 @@
 const model = require('../ai/model.json');
 
 const WINDOW_SIZE = 12;
+const MAX_AGE_SECONDS = 120;
+const MAX_GAP_SECONDS = 60;
 const DISCLAIMER = 'AI-generated decision support. Not a diagnosis.';
 const DATA_NOTE = 'Model trained on simulated data; not clinical data.';
 
@@ -55,21 +57,60 @@ function timestampValue(reading) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function factorMessage(featureName, standardizedValue) {
-  const direction = standardizedValue >= 0 ? 'rising' : 'declining';
+function readingTime(reading) {
+  if (reading?.timestamp) {
+    const date = new Date(reading.timestamp);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (Number.isFinite(Number(reading?.timestampOffsetSeconds))) {
+    return new Date(Number(reading.timestampOffsetSeconds) * 1000);
+  }
+  return null;
+}
+
+function metricLabel(featureName) {
+  if (featureName.startsWith('heartRate')) return 'Heart rate';
+  if (featureName.startsWith('spo2')) return 'SpO2';
+  return 'Temperature';
+}
+
+function isConcerning(featureName, featureValue, standardizedValue) {
+  if (featureName === 'outside_threshold_count') return featureValue > 0;
   if (featureName.endsWith('_slope')) {
-    const label = featureName.startsWith('heartRate') ? 'Heart rate' : featureName.startsWith('spo2') ? 'SpO2' : 'Temperature';
-    return `${label} trend is ${direction}`;
+    return featureName.startsWith('spo2') ? featureValue < 0 : featureValue > 0;
   }
   if (featureName.endsWith('_mean')) {
-    const label = featureName.startsWith('heartRate') ? 'Heart rate' : featureName.startsWith('spo2') ? 'SpO2' : 'Temperature';
-    return `${label} level is ${standardizedValue >= 0 ? 'elevated' : 'lower'} than its training baseline`;
+    if (featureName.startsWith('heartRate')) return featureValue > 120;
+    if (featureName.startsWith('spo2')) return featureValue < 92;
+    return featureValue > 38;
+  }
+  return featureName.endsWith('_std') && standardizedValue > 0;
+}
+
+function factorMessage(featureName, featureValue, standardizedValue) {
+  const label = metricLabel(featureName);
+  if (featureName.endsWith('_slope')) {
+    return `${label} trend is ${featureValue < 0 ? 'falling' : 'rising'}`;
+  }
+  if (featureName.endsWith('_mean')) {
+    return `${label} is ${featureName.startsWith('spo2') ? 'low' : 'high'}`;
   }
   if (featureName.endsWith('_std')) {
-    const label = featureName.startsWith('heartRate') ? 'Heart rate' : featureName.startsWith('spo2') ? 'SpO2' : 'Temperature';
-    return `${label} variability is ${standardizedValue >= 0 ? 'high' : 'low'}`;
+    return `${label} variability is high`;
   }
-  return `${Math.round(Math.max(0, standardizedValue))} readings are outside alert thresholds`;
+  return `${Math.round(featureValue)} readings are outside alert thresholds`;
+}
+
+function noPrediction(base, status, extra = {}) {
+  return {
+    ...base,
+    ...extra,
+    status,
+    riskLevel: null,
+    probabilities: {},
+    score: null,
+    contributingFactors: []
+  };
 }
 
 function analyzeRisk(readings) {
@@ -88,15 +129,32 @@ function analyzeRisk(readings) {
   };
 
   const features = extractFeatures(inputReadings);
-  if (!features) {
-    return {
-      ...base,
-      status: 'insufficient_data',
-      riskLevel: null,
-      probabilities: {},
-      score: null,
-      contributingFactors: []
-    };
+  if (!features) return noPrediction(base, 'insufficient_data');
+
+  const newestReading = window[window.length - 1];
+  const newestDate = readingTime(newestReading);
+  if (!newestDate) {
+    return noPrediction(base, 'insufficient_data', { reason: 'Recent readings are not continuous.' });
+  }
+
+  const ageSeconds = Math.max(0, Math.floor((Date.now() - newestDate.getTime()) / 1000));
+  if (newestReading.timestamp && ageSeconds > MAX_AGE_SECONDS) {
+    return noPrediction(base, 'stale', {
+      latestReadingAt: newestDate.toISOString(),
+      ageSeconds
+    });
+  }
+
+  for (let index = 1; index < window.length; index += 1) {
+    const previousDate = readingTime(window[index - 1]);
+    const currentDate = readingTime(window[index]);
+    if (!previousDate || !currentDate) {
+      return noPrediction(base, 'insufficient_data', { reason: 'Recent readings are not continuous.' });
+    }
+    const gapSeconds = (currentDate.getTime() - previousDate.getTime()) / 1000;
+    if (gapSeconds > MAX_GAP_SECONDS) {
+      return noPrediction(base, 'insufficient_data', { reason: 'Recent readings are not continuous.' });
+    }
   }
 
   const standardized = features.map((value, index) => (value - model.scalerMeans[index]) / model.scalerScales[index]);
@@ -112,9 +170,25 @@ function analyzeRisk(readings) {
   const probabilities = Object.fromEntries(model.classNames.map((className, index) => [className, probabilityValues[index]]));
   const contributions = model.featureNames.map((featureName, index) => ({
     feature: featureName,
-    contribution: model.coefficients[predictedIndex][index] * standardized[index],
-    message: factorMessage(featureName, standardized[index])
+    featureValue: features[index],
+    standardizedValue: standardized[index],
+    contribution: model.coefficients[predictedIndex][index] * standardized[index]
   }));
+  const meaningfulFactors = contributions
+    .filter((factor) => isConcerning(factor.feature, factor.featureValue, factor.standardizedValue))
+    .filter((factor) => factor.contribution > 0)
+    .sort((first, second) => second.contribution - first.contribution)
+    .slice(0, 3)
+    .map((factor) => ({
+      feature: factor.feature,
+      contribution: factor.contribution,
+      message: factorMessage(factor.feature, factor.featureValue, factor.standardizedValue)
+    }));
+  const contributingFactors = riskLevel === 'low'
+    ? [{ message: 'No sustained trend or abnormal readings detected' }]
+    : meaningfulFactors.length > 0
+      ? meaningfulFactors
+      : [{ message: 'Pattern detected by the model; no single factor dominates' }];
 
   return {
     ...base,
@@ -122,9 +196,7 @@ function analyzeRisk(readings) {
     riskLevel,
     probabilities,
     score: probabilityValues[predictedIndex],
-    contributingFactors: contributions
-      .sort((first, second) => Math.abs(second.contribution) - Math.abs(first.contribution))
-      .slice(0, 3)
+    contributingFactors
   };
 }
 

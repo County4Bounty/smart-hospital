@@ -7,7 +7,13 @@ function formatDate(timestamp) {
 }
 
 function formatProbability(probability) {
-  return `${(Number(probability || 0) * 100).toFixed(1)}%`;
+  const percentage = Number(probability || 0) * 100;
+  return percentage > 99 ? '>99%' : `${percentage.toFixed(1)}%`;
+}
+
+function formatAge(ageSeconds) {
+  if (ageSeconds < 60) return `${ageSeconds}s ago`;
+  return `${Math.floor(ageSeconds / 60)} min ago`;
 }
 
 function analysisError(requestError) {
@@ -64,8 +70,10 @@ export default function AiInsights({ api, patients }) {
           </div>
 
           {result?.error && <p className="subtle" style={{ color: '#9f3a2d' }}>{result.error}</p>}
-          {analysis?.status === 'insufficient_data' && <p className="subtle">Need {neededReadings} more reading{neededReadings === 1 ? '' : 's'} for an analysis.</p>}
+          {analysis?.status === 'stale' && <p className="subtle">No recent data — last reading {formatAge(analysis.ageSeconds)}.</p>}
+          {analysis?.status === 'insufficient_data' && <p className="subtle">{analysis.reason || `Need ${neededReadings} more reading${neededReadings === 1 ? '' : 's'} for an analysis.`}</p>}
           {analysis?.status === 'ok' && <>
+            <p className="subtle" style={{ marginTop: '10px', fontSize: '12px' }}>Risk reflects the recent trend in this patient’s readings, not current severity. Scores are model outputs, not calibrated probabilities.</p>
             <div style={{ marginTop: '16px' }}>
               <p className="eyebrow">CONTRIBUTING FACTORS</p>
               <ul style={{ margin: '10px 0 0', paddingLeft: '20px', color: '#405753' }}>
