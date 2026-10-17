@@ -9,6 +9,7 @@ const {
 } = require('./alertEngine');
 const { login, requireAuth, requireRole } = require('./auth');
 const { Patient, HealthReading, Alert, User, Threshold, Device } = require('./models');
+const { analyzeRisk } = require('./aiRisk');
 
 function serializeReading(reading) {
   return { ...reading.toObject(), id: reading._id.toString() };
@@ -163,6 +164,16 @@ function createApp(io) {
       ? results.filter((_reading, index) => index % Math.ceil(results.length / 500) === 0).slice(0, 500)
       : results;
     return res.json(sampledResults.map(serializeReading));
+  });
+  app.get('/api/ai/risk/:patientId', requireAuth, async (req, res) => {
+    try {
+      const readings = await HealthReading.find({ patientId: req.params.patientId })
+        .sort({ timestamp: -1 })
+        .limit(12);
+      return res.json(analyzeRisk(readings.reverse()));
+    } catch {
+      return res.status(503).json({ message: 'AI analysis unavailable' });
+    }
   });
   app.get('/api/alerts', requireAuth, async (req, res) => {
     const query = req.query.patientId ? { patientId: req.query.patientId } : {};

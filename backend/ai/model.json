@@ -1,6 +1,6 @@
 {
   "modelVersion": "synthetic-risk-logreg-v1",
-  "trainingDate": "2026-10-16",
+  "trainingDate": "2026-10-17",
   "datasetDescription": "Synthetic patient episodes for offline ML pipeline development; not clinical data.",
   "featureNames": [
     "heartRate_mean",

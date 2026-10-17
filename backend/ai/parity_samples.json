@@ -1,0 +1,1006 @@
+{
+  "modelVersion": "synthetic-risk-logreg-v1",
+  "classNames": [
+    "high",
+    "low",
+    "moderate"
+  ],
+  "samples": [
+    {
+      "scenario": "stable",
+      "endReadingIndex": 11,
+      "readings": [
+        {
+          "timestampOffsetSeconds": 0,
+          "heartRate": 80.21,
+          "spo2": 97.429,
+          "temperature": 36.756
+        },
+        {
+          "timestampOffsetSeconds": 5,
+          "heartRate": 74.751,
+          "spo2": 97.534,
+          "temperature": 36.9
+        },
+        {
+          "timestampOffsetSeconds": 10,
+          "heartRate": 78.415,
+          "spo2": 97.578,
+          "temperature": 36.896
+        },
+        {
+          "timestampOffsetSeconds": 15,
+          "heartRate": 76.687,
+          "spo2": 96.522,
+          "temperature": 36.906
+        },
+        {
+          "timestampOffsetSeconds": 20,
+          "heartRate": 74.587,
+          "spo2": 97.739,
+          "temperature": 36.799
+        },
+        {
+          "timestampOffsetSeconds": 25,
+          "heartRate": 69.88,
+          "spo2": 98.706,
+          "temperature": 36.793
+        },
+        {
+          "timestampOffsetSeconds": 30,
+          "heartRate": 72.445,
+          "spo2": 98.092,
+          "temperature": 36.896
+        },
+        {
+          "timestampOffsetSeconds": 35,
+          "heartRate": 77.851,
+          "spo2": 97.339,
+          "temperature": 36.761
+        },
+        {
+          "timestampOffsetSeconds": 40,
+          "heartRate": 77.542,
+          "spo2": 96.741,
+          "temperature": 37.011
+        },
+        {
+          "timestampOffsetSeconds": 45,
+          "heartRate": 72.761,
+          "spo2": 96.984,
+          "temperature": 36.878
+        },
+        {
+          "timestampOffsetSeconds": 50,
+          "heartRate": 71.858,
+          "spo2": 97.804,
+          "temperature": 36.913
+        },
+        {
+          "timestampOffsetSeconds": 55,
+          "heartRate": 79.339,
+          "spo2": 97.586,
+          "temperature": 37.044
+        }
+      ],
+      "probabilities": {
+        "high": 0.0015817523235251952,
+        "low": 0.6132680900605113,
+        "moderate": 0.38515015761596344
+      }
+    },
+    {
+      "scenario": "stable",
+      "endReadingIndex": 30,
+      "readings": [
+        {
+          "timestampOffsetSeconds": 95,
+          "heartRate": 76.497,
+          "spo2": 97.979,
+          "temperature": 36.696
+        },
+        {
+          "timestampOffsetSeconds": 100,
+          "heartRate": 74.819,
+          "spo2": 97.158,
+          "temperature": 36.997
+        },
+        {
+          "timestampOffsetSeconds": 105,
+          "heartRate": 78.186,
+          "spo2": 96.333,
+          "temperature": 36.847
+        },
+        {
+          "timestampOffsetSeconds": 110,
+          "heartRate": 74.648,
+          "spo2": 98.025,
+          "temperature": 36.819
+        },
+        {
+          "timestampOffsetSeconds": 115,
+          "heartRate": 76.897,
+          "spo2": 98.974,
+          "temperature": 36.796
+        },
+        {
+          "timestampOffsetSeconds": 120,
+          "heartRate": 77.733,
+          "spo2": 97.022,
+          "temperature": 36.81
+        },
+        {
+          "timestampOffsetSeconds": 125,
+          "heartRate": 78.21,
+          "spo2": 97.408,
+          "temperature": 36.821
+        },
+        {
+          "timestampOffsetSeconds": 130,
+          "heartRate": 77.048,
+          "spo2": 97.274,
+          "temperature": 36.844
+        },
+        {
+          "timestampOffsetSeconds": 135,
+          "heartRate": 74.551,
+          "spo2": 97.383,
+          "temperature": 36.807
+        },
+        {
+          "timestampOffsetSeconds": 140,
+          "heartRate": 74.299,
+          "spo2": 97.783,
+          "temperature": 36.813
+        },
+        {
+          "timestampOffsetSeconds": 145,
+          "heartRate": 74.852,
+          "spo2": 97.699,
+          "temperature": 36.879
+        },
+        {
+          "timestampOffsetSeconds": 150,
+          "heartRate": 79.699,
+          "spo2": 97.931,
+          "temperature": 36.94
+        }
+      ],
+      "probabilities": {
+        "high": 0.0008523946819957547,
+        "low": 0.6920982407462873,
+        "moderate": 0.307049364571717
+      }
+    },
+    {
+      "scenario": "stable",
+      "endReadingIndex": 59,
+      "readings": [
+        {
+          "timestampOffsetSeconds": 240,
+          "heartRate": 77.422,
+          "spo2": 98.182,
+          "temperature": 36.885
+        },
+        {
+          "timestampOffsetSeconds": 245,
+          "heartRate": 75.973,
+          "spo2": 97.819,
+          "temperature": 36.706
+        },
+        {
+          "timestampOffsetSeconds": 250,
+          "heartRate": 74.142,
+          "spo2": 98.205,
+          "temperature": 36.898
+        },
+        {
+          "timestampOffsetSeconds": 255,
+          "heartRate": 74.506,
+          "spo2": 97.903,
+          "temperature": 36.969
+        },
+        {
+          "timestampOffsetSeconds": 260,
+          "heartRate": 71.974,
+          "spo2": 97.461,
+          "temperature": 36.844
+        },
+        {
+          "timestampOffsetSeconds": 265,
+          "heartRate": 74.921,
+          "spo2": 97.188,
+          "temperature": 36.77
+        },
+        {
+          "timestampOffsetSeconds": 270,
+          "heartRate": 76.733,
+          "spo2": 97.552,
+          "temperature": 36.81
+        },
+        {
+          "timestampOffsetSeconds": 275,
+          "heartRate": 76.088,
+          "spo2": 96.713,
+          "temperature": 36.83
+        },
+        {
+          "timestampOffsetSeconds": 280,
+          "heartRate": 77.572,
+          "spo2": 97.397,
+          "temperature": 36.852
+        },
+        {
+          "timestampOffsetSeconds": 285,
+          "heartRate": 80.36,
+          "spo2": 97.65,
+          "temperature": 36.928
+        },
+        {
+          "timestampOffsetSeconds": 290,
+          "heartRate": 78.467,
+          "spo2": 97.431,
+          "temperature": 36.79
+        },
+        {
+          "timestampOffsetSeconds": 295,
+          "heartRate": 78.619,
+          "spo2": 96.27,
+          "temperature": 36.736
+        }
+      ],
+      "probabilities": {
+        "high": 0.030937101048950474,
+        "low": 0.5384572115887766,
+        "moderate": 0.430605687362273
+      }
+    },
+    {
+      "scenario": "gradual_deterioration",
+      "endReadingIndex": 11,
+      "readings": [
+        {
+          "timestampOffsetSeconds": 0,
+          "heartRate": 69.446,
+          "spo2": 97.036,
+          "temperature": 36.935
+        },
+        {
+          "timestampOffsetSeconds": 5,
+          "heartRate": 73.202,
+          "spo2": 97.924,
+          "temperature": 36.718
+        },
+        {
+          "timestampOffsetSeconds": 10,
+          "heartRate": 74.12,
+          "spo2": 98.135,
+          "temperature": 36.898
+        },
+        {
+          "timestampOffsetSeconds": 15,
+          "heartRate": 71.04,
+          "spo2": 98.018,
+          "temperature": 36.815
+        },
+        {
+          "timestampOffsetSeconds": 20,
+          "heartRate": 73.056,
+          "spo2": 97.522,
+          "temperature": 36.729
+        },
+        {
+          "timestampOffsetSeconds": 25,
+          "heartRate": 74.774,
+          "spo2": 96.632,
+          "temperature": 37.136
+        },
+        {
+          "timestampOffsetSeconds": 30,
+          "heartRate": 75.041,
+          "spo2": 97.293,
+          "temperature": 36.763
+        },
+        {
+          "timestampOffsetSeconds": 35,
+          "heartRate": 73.931,
+          "spo2": 96.888,
+          "temperature": 36.868
+        },
+        {
+          "timestampOffsetSeconds": 40,
+          "heartRate": 75.355,
+          "spo2": 97.036,
+          "temperature": 36.835
+        },
+        {
+          "timestampOffsetSeconds": 45,
+          "heartRate": 72.757,
+          "spo2": 96.556,
+          "temperature": 36.858
+        },
+        {
+          "timestampOffsetSeconds": 50,
+          "heartRate": 73.144,
+          "spo2": 96.168,
+          "temperature": 36.892
+        },
+        {
+          "timestampOffsetSeconds": 55,
+          "heartRate": 72.241,
+          "spo2": 96.418,
+          "temperature": 37.015
+        }
+      ],
+      "probabilities": {
+        "high": 0.5812129123854821,
+        "low": 0.18808401903911862,
+        "moderate": 0.23070306857539924
+      }
+    },
+    {
+      "scenario": "gradual_deterioration",
+      "endReadingIndex": 35,
+      "readings": [
+        {
+          "timestampOffsetSeconds": 120,
+          "heartRate": 85.557,
+          "spo2": 94.421,
+          "temperature": 37.195
+        },
+        {
+          "timestampOffsetSeconds": 125,
+          "heartRate": 85.442,
+          "spo2": 94.425,
+          "temperature": 37.319
+        },
+        {
+          "timestampOffsetSeconds": 130,
+          "heartRate": 78.295,
+          "spo2": 93.775,
+          "temperature": 37.098
+        },
+        {
+          "timestampOffsetSeconds": 135,
+          "heartRate": 84.947,
+          "spo2": 94.104,
+          "temperature": 37.445
+        },
+        {
+          "timestampOffsetSeconds": 140,
+          "heartRate": 81.2,
+          "spo2": 93.504,
+          "temperature": 37.338
+        },
+        {
+          "timestampOffsetSeconds": 145,
+          "heartRate": 85.799,
+          "spo2": 94.416,
+          "temperature": 37.278
+        },
+        {
+          "timestampOffsetSeconds": 150,
+          "heartRate": 85.27,
+          "spo2": 92.949,
+          "temperature": 37.342
+        },
+        {
+          "timestampOffsetSeconds": 155,
+          "heartRate": 88.174,
+          "spo2": 93.466,
+          "temperature": 37.432
+        },
+        {
+          "timestampOffsetSeconds": 160,
+          "heartRate": 87.992,
+          "spo2": 93.705,
+          "temperature": 37.391
+        },
+        {
+          "timestampOffsetSeconds": 165,
+          "heartRate": 86.266,
+          "spo2": 93.793,
+          "temperature": 37.237
+        },
+        {
+          "timestampOffsetSeconds": 170,
+          "heartRate": 85.802,
+          "spo2": 93.212,
+          "temperature": 37.509
+        },
+        {
+          "timestampOffsetSeconds": 175,
+          "heartRate": 89.082,
+          "spo2": 92.68,
+          "temperature": 37.165
+        }
+      ],
+      "probabilities": {
+        "high": 0.9987818896020086,
+        "low": 0.0007337404663167133,
+        "moderate": 0.0004843699316745833
+      }
+    },
+    {
+      "scenario": "gradual_deterioration",
+      "endReadingIndex": 59,
+      "readings": [
+        {
+          "timestampOffsetSeconds": 240,
+          "heartRate": 91.317,
+          "spo2": 90.545,
+          "temperature": 37.819
+        },
+        {
+          "timestampOffsetSeconds": 245,
+          "heartRate": 92.422,
+          "spo2": 89.967,
+          "temperature": 37.727
+        },
+        {
+          "timestampOffsetSeconds": 250,
+          "heartRate": 96.048,
+          "spo2": 90.4,
+          "temperature": 37.707
+        },
+        {
+          "timestampOffsetSeconds": 255,
+          "heartRate": 99.401,
+          "spo2": 90.179,
+          "temperature": 37.849
+        },
+        {
+          "timestampOffsetSeconds": 260,
+          "heartRate": 92.471,
+          "spo2": 89.978,
+          "temperature": 37.68
+        },
+        {
+          "timestampOffsetSeconds": 265,
+          "heartRate": 98.736,
+          "spo2": 90.025,
+          "temperature": 37.754
+        },
+        {
+          "timestampOffsetSeconds": 270,
+          "heartRate": 94.713,
+          "spo2": 89.35,
+          "temperature": 37.798
+        },
+        {
+          "timestampOffsetSeconds": 275,
+          "heartRate": 101.396,
+          "spo2": 89.625,
+          "temperature": 38.001
+        },
+        {
+          "timestampOffsetSeconds": 280,
+          "heartRate": 98.519,
+          "spo2": 89.52,
+          "temperature": 37.834
+        },
+        {
+          "timestampOffsetSeconds": 285,
+          "heartRate": 98.281,
+          "spo2": 89.224,
+          "temperature": 37.837
+        },
+        {
+          "timestampOffsetSeconds": 290,
+          "heartRate": 99.924,
+          "spo2": 89.009,
+          "temperature": 37.758
+        },
+        {
+          "timestampOffsetSeconds": 295,
+          "heartRate": 100.453,
+          "spo2": 88.514,
+          "temperature": 37.944
+        }
+      ],
+      "probabilities": {
+        "high": 0.999941180452587,
+        "low": 3.406105512050887e-06,
+        "moderate": 5.541344190096206e-05
+      }
+    },
+    {
+      "scenario": "sudden_spike",
+      "endReadingIndex": 11,
+      "readings": [
+        {
+          "timestampOffsetSeconds": 0,
+          "heartRate": 79.546,
+          "spo2": 95.836,
+          "temperature": 37.036
+        },
+        {
+          "timestampOffsetSeconds": 5,
+          "heartRate": 81.631,
+          "spo2": 95.783,
+          "temperature": 37.058
+        },
+        {
+          "timestampOffsetSeconds": 10,
+          "heartRate": 74.84,
+          "spo2": 97.221,
+          "temperature": 36.901
+        },
+        {
+          "timestampOffsetSeconds": 15,
+          "heartRate": 81.021,
+          "spo2": 96.52,
+          "temperature": 36.918
+        },
+        {
+          "timestampOffsetSeconds": 20,
+          "heartRate": 81.647,
+          "spo2": 96.186,
+          "temperature": 36.917
+        },
+        {
+          "timestampOffsetSeconds": 25,
+          "heartRate": 79.949,
+          "spo2": 96.869,
+          "temperature": 36.947
+        },
+        {
+          "timestampOffsetSeconds": 30,
+          "heartRate": 79.631,
+          "spo2": 96.175,
+          "temperature": 36.978
+        },
+        {
+          "timestampOffsetSeconds": 35,
+          "heartRate": 75.501,
+          "spo2": 96.033,
+          "temperature": 37.008
+        },
+        {
+          "timestampOffsetSeconds": 40,
+          "heartRate": 80.076,
+          "spo2": 96.36,
+          "temperature": 37.205
+        },
+        {
+          "timestampOffsetSeconds": 45,
+          "heartRate": 75.014,
+          "spo2": 96.134,
+          "temperature": 36.9
+        },
+        {
+          "timestampOffsetSeconds": 50,
+          "heartRate": 76.88,
+          "spo2": 96.77,
+          "temperature": 36.923
+        },
+        {
+          "timestampOffsetSeconds": 55,
+          "heartRate": 82.085,
+          "spo2": 96.128,
+          "temperature": 36.925
+        }
+      ],
+      "probabilities": {
+        "high": 0.005379531324558912,
+        "low": 0.7963690599843359,
+        "moderate": 0.19825140869110522
+      }
+    },
+    {
+      "scenario": "sudden_spike",
+      "endReadingIndex": 41,
+      "readings": [
+        {
+          "timestampOffsetSeconds": 150,
+          "heartRate": 78.082,
+          "spo2": 96.443,
+          "temperature": 36.99
+        },
+        {
+          "timestampOffsetSeconds": 155,
+          "heartRate": 76.788,
+          "spo2": 96.909,
+          "temperature": 37.067
+        },
+        {
+          "timestampOffsetSeconds": 160,
+          "heartRate": 77.11,
+          "spo2": 96.529,
+          "temperature": 37.005
+        },
+        {
+          "timestampOffsetSeconds": 165,
+          "heartRate": 77.738,
+          "spo2": 95.889,
+          "temperature": 36.944
+        },
+        {
+          "timestampOffsetSeconds": 170,
+          "heartRate": 79.912,
+          "spo2": 96.52,
+          "temperature": 36.836
+        },
+        {
+          "timestampOffsetSeconds": 175,
+          "heartRate": 77.179,
+          "spo2": 96.743,
+          "temperature": 36.949
+        },
+        {
+          "timestampOffsetSeconds": 180,
+          "heartRate": 128,
+          "spo2": 90,
+          "temperature": 38.0
+        },
+        {
+          "timestampOffsetSeconds": 185,
+          "heartRate": 128,
+          "spo2": 90,
+          "temperature": 38.0
+        },
+        {
+          "timestampOffsetSeconds": 190,
+          "heartRate": 128,
+          "spo2": 90,
+          "temperature": 38.0
+        },
+        {
+          "timestampOffsetSeconds": 195,
+          "heartRate": 128,
+          "spo2": 90,
+          "temperature": 38.0
+        },
+        {
+          "timestampOffsetSeconds": 200,
+          "heartRate": 128,
+          "spo2": 90,
+          "temperature": 38.0
+        },
+        {
+          "timestampOffsetSeconds": 205,
+          "heartRate": 128,
+          "spo2": 90,
+          "temperature": 38.0
+        }
+      ],
+      "probabilities": {
+        "high": 0.006387390184192016,
+        "low": 4.454614799076356e-10,
+        "moderate": 0.9936126093703465
+      }
+    },
+    {
+      "scenario": "sudden_spike",
+      "endReadingIndex": 59,
+      "readings": [
+        {
+          "timestampOffsetSeconds": 240,
+          "heartRate": 79.768,
+          "spo2": 96.791,
+          "temperature": 36.813
+        },
+        {
+          "timestampOffsetSeconds": 245,
+          "heartRate": 77.838,
+          "spo2": 96.209,
+          "temperature": 36.993
+        },
+        {
+          "timestampOffsetSeconds": 250,
+          "heartRate": 79.656,
+          "spo2": 95.987,
+          "temperature": 37.084
+        },
+        {
+          "timestampOffsetSeconds": 255,
+          "heartRate": 76.07,
+          "spo2": 95.907,
+          "temperature": 37.125
+        },
+        {
+          "timestampOffsetSeconds": 260,
+          "heartRate": 77.378,
+          "spo2": 96.366,
+          "temperature": 36.973
+        },
+        {
+          "timestampOffsetSeconds": 265,
+          "heartRate": 81.473,
+          "spo2": 95.925,
+          "temperature": 37.079
+        },
+        {
+          "timestampOffsetSeconds": 270,
+          "heartRate": 77.932,
+          "spo2": 96.373,
+          "temperature": 36.898
+        },
+        {
+          "timestampOffsetSeconds": 275,
+          "heartRate": 80.858,
+          "spo2": 95.334,
+          "temperature": 37.05
+        },
+        {
+          "timestampOffsetSeconds": 280,
+          "heartRate": 77.04,
+          "spo2": 96.534,
+          "temperature": 37.042
+        },
+        {
+          "timestampOffsetSeconds": 285,
+          "heartRate": 78.387,
+          "spo2": 96.848,
+          "temperature": 36.907
+        },
+        {
+          "timestampOffsetSeconds": 290,
+          "heartRate": 74.704,
+          "spo2": 95.682,
+          "temperature": 37.113
+        },
+        {
+          "timestampOffsetSeconds": 295,
+          "heartRate": 77.603,
+          "spo2": 97.297,
+          "temperature": 36.995
+        }
+      ],
+      "probabilities": {
+        "high": 0.0194309650261024,
+        "low": 0.7632970275748837,
+        "moderate": 0.217272007399014
+      }
+    },
+    {
+      "scenario": "recovering",
+      "endReadingIndex": 11,
+      "readings": [
+        {
+          "timestampOffsetSeconds": 0,
+          "heartRate": 145,
+          "spo2": 87,
+          "temperature": 38.6
+        },
+        {
+          "timestampOffsetSeconds": 5,
+          "heartRate": 145,
+          "spo2": 87,
+          "temperature": 38.6
+        },
+        {
+          "timestampOffsetSeconds": 10,
+          "heartRate": 145,
+          "spo2": 87,
+          "temperature": 38.6
+        },
+        {
+          "timestampOffsetSeconds": 15,
+          "heartRate": 145,
+          "spo2": 87,
+          "temperature": 38.6
+        },
+        {
+          "timestampOffsetSeconds": 20,
+          "heartRate": 145,
+          "spo2": 87,
+          "temperature": 38.6
+        },
+        {
+          "timestampOffsetSeconds": 25,
+          "heartRate": 145,
+          "spo2": 87,
+          "temperature": 38.6
+        },
+        {
+          "timestampOffsetSeconds": 30,
+          "heartRate": 145,
+          "spo2": 87,
+          "temperature": 38.6
+        },
+        {
+          "timestampOffsetSeconds": 35,
+          "heartRate": 145,
+          "spo2": 87,
+          "temperature": 38.6
+        },
+        {
+          "timestampOffsetSeconds": 40,
+          "heartRate": 145,
+          "spo2": 87,
+          "temperature": 38.6
+        },
+        {
+          "timestampOffsetSeconds": 45,
+          "heartRate": 145,
+          "spo2": 87,
+          "temperature": 38.6
+        },
+        {
+          "timestampOffsetSeconds": 50,
+          "heartRate": 145,
+          "spo2": 87,
+          "temperature": 38.6
+        },
+        {
+          "timestampOffsetSeconds": 55,
+          "heartRate": 145,
+          "spo2": 87,
+          "temperature": 38.6
+        }
+      ],
+      "probabilities": {
+        "high": 0.0711022543702564,
+        "low": 0.9232131824241666,
+        "moderate": 0.005684563205577004
+      }
+    },
+    {
+      "scenario": "recovering",
+      "endReadingIndex": 30,
+      "readings": [
+        {
+          "timestampOffsetSeconds": 95,
+          "heartRate": 134.569,
+          "spo2": 88.607,
+          "temperature": 38.308
+        },
+        {
+          "timestampOffsetSeconds": 100,
+          "heartRate": 133.226,
+          "spo2": 88.773,
+          "temperature": 38.336
+        },
+        {
+          "timestampOffsetSeconds": 105,
+          "heartRate": 131.789,
+          "spo2": 88.998,
+          "temperature": 38.223
+        },
+        {
+          "timestampOffsetSeconds": 110,
+          "heartRate": 130.246,
+          "spo2": 89.249,
+          "temperature": 38.259
+        },
+        {
+          "timestampOffsetSeconds": 115,
+          "heartRate": 128.863,
+          "spo2": 89.423,
+          "temperature": 38.249
+        },
+        {
+          "timestampOffsetSeconds": 120,
+          "heartRate": 127.313,
+          "spo2": 89.644,
+          "temperature": 38.258
+        },
+        {
+          "timestampOffsetSeconds": 125,
+          "heartRate": 125.854,
+          "spo2": 89.928,
+          "temperature": 38.162
+        },
+        {
+          "timestampOffsetSeconds": 130,
+          "heartRate": 124.356,
+          "spo2": 90.337,
+          "temperature": 37.98
+        },
+        {
+          "timestampOffsetSeconds": 135,
+          "heartRate": 122.947,
+          "spo2": 90.459,
+          "temperature": 38.049
+        },
+        {
+          "timestampOffsetSeconds": 140,
+          "heartRate": 121.447,
+          "spo2": 90.71,
+          "temperature": 37.94
+        },
+        {
+          "timestampOffsetSeconds": 145,
+          "heartRate": 120.042,
+          "spo2": 90.807,
+          "temperature": 37.794
+        },
+        {
+          "timestampOffsetSeconds": 150,
+          "heartRate": 118.388,
+          "spo2": 91.08,
+          "temperature": 37.811
+        }
+      ],
+      "probabilities": {
+        "high": 2.0544310996806783e-14,
+        "low": 0.9226802928584646,
+        "moderate": 0.07731970714151493
+      }
+    },
+    {
+      "scenario": "recovering",
+      "endReadingIndex": 59,
+      "readings": [
+        {
+          "timestampOffsetSeconds": 240,
+          "heartRate": 92.104,
+          "spo2": 95.298,
+          "temperature": 37.306
+        },
+        {
+          "timestampOffsetSeconds": 245,
+          "heartRate": 90.657,
+          "spo2": 95.566,
+          "temperature": 37.343
+        },
+        {
+          "timestampOffsetSeconds": 250,
+          "heartRate": 89.06,
+          "spo2": 95.8,
+          "temperature": 37.344
+        },
+        {
+          "timestampOffsetSeconds": 255,
+          "heartRate": 87.632,
+          "spo2": 95.972,
+          "temperature": 37.247
+        },
+        {
+          "timestampOffsetSeconds": 260,
+          "heartRate": 86.092,
+          "spo2": 96.19,
+          "temperature": 37.069
+        },
+        {
+          "timestampOffsetSeconds": 265,
+          "heartRate": 84.719,
+          "spo2": 96.516,
+          "temperature": 37.136
+        },
+        {
+          "timestampOffsetSeconds": 270,
+          "heartRate": 83.079,
+          "spo2": 96.602,
+          "temperature": 37.157
+        },
+        {
+          "timestampOffsetSeconds": 275,
+          "heartRate": 81.628,
+          "spo2": 96.838,
+          "temperature": 37.153
+        },
+        {
+          "timestampOffsetSeconds": 280,
+          "heartRate": 80.372,
+          "spo2": 97.19,
+          "temperature": 37.053
+        },
+        {
+          "timestampOffsetSeconds": 285,
+          "heartRate": 78.742,
+          "spo2": 97.451,
+          "temperature": 36.887
+        },
+        {
+          "timestampOffsetSeconds": 290,
+          "heartRate": 77.398,
+          "spo2": 97.657,
+          "temperature": 37.04
+        },
+        {
+          "timestampOffsetSeconds": 295,
+          "heartRate": 75.855,
+          "spo2": 97.862,
+          "temperature": 36.963
+        }
+      ],
+      "probabilities": {
+        "high": 4.592085345547118e-12,
+        "low": 0.9083627361854222,
+        "moderate": 0.09163726380998571
+      }
+    }
+  ]
+}

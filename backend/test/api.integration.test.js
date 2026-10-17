@@ -124,6 +124,47 @@ test('POST /api/readings creates alerts for abnormal values but not normal value
   assert.equal(await Alert.countDocuments({ patientId: normalPatient.patientId }), 0);
 });
 
+test('GET /api/ai/risk/:patientId handles insufficient and sufficient readings', async () => {
+  const shortPatient = await createTestPatient('P-AI-SHORT-001');
+  await HealthReading.insertMany(Array.from({ length: 3 }, (_value, index) => ({
+    patientId: shortPatient.patientId,
+    heartRate: 80,
+    spo2: 98,
+    temperature: 37,
+    timestamp: new Date(Date.now() - (3 - index) * 5000)
+  })));
+
+  const insufficient = await request(`/api/ai/risk/${shortPatient.patientId}`, {
+    headers: authHeaders(adminToken)
+  });
+  assert.equal(insufficient.status, 200);
+  assert.equal(insufficient.body.status, 'insufficient_data');
+  assert.equal(insufficient.body.riskLevel, null);
+
+  const completePatient = await createTestPatient('P-AI-COMPLETE-001');
+  await HealthReading.insertMany(Array.from({ length: 12 }, (_value, index) => ({
+    patientId: completePatient.patientId,
+    heartRate: 80 + index * 0.2,
+    spo2: 98 - index * 0.05,
+    temperature: 37 + index * 0.01,
+    timestamp: new Date(Date.now() - (12 - index) * 5000)
+  })));
+
+  const complete = await request(`/api/ai/risk/${completePatient.patientId}`, {
+    headers: authHeaders(adminToken)
+  });
+  assert.equal(complete.status, 200);
+  assert.equal(complete.body.status, 'ok');
+  assert.ok(['low', 'moderate', 'high'].includes(complete.body.riskLevel));
+  assert.equal(complete.body.window.readingCount, 12);
+  assert.equal(Object.keys(complete.body.probabilities).length, 3);
+});
+
+test('GET /api/ai/risk/:patientId rejects unauthenticated requests', async () => {
+  const response = await request('/api/ai/risk/P-AI-UNAUTH-001');
+  assert.equal(response.status, 401);
+});
+
 test('admin can create and update patients while non-admin is rejected', async () => {
   const patientPayload = {
     patientId: 'P-ADMIN-001',
