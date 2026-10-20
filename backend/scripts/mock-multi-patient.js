@@ -26,6 +26,12 @@ const path = require('path');
 const API_BASE = process.env.API_BASE || 'http://localhost:4000';
 const ENV_PATH = path.join(__dirname, '..', '.env');
 
+function parseExcludedPatients() {
+  const envValue = process.env.EXCLUDE_PATIENTS || '';
+  const cliValue = process.argv.find((argument) => argument.startsWith('--exclude='))?.slice('--exclude='.length) || '';
+  return new Set(`${envValue},${cliValue}`.split(',').map((patientId) => patientId.trim()).filter(Boolean));
+}
+
 // Each patient gets its own independent "abnormal window" cycle length and
 // offset, so they don't all spike at the same time - closer to a real ward.
 const PATIENTS = [
@@ -145,13 +151,23 @@ async function postReading(patient) {
 }
 
 async function main() {
+  const excludedPatientIds = parseExcludedPatients();
+  const skippedPatients = PATIENTS.filter((patient) => excludedPatientIds.has(patient.patientId));
+  const activePatients = PATIENTS.filter((patient) => !excludedPatientIds.has(patient.patientId));
+  if (skippedPatients.length) {
+    console.log(`[config] Skipping patients: ${skippedPatients.map((patient) => patient.patientId).join(', ')}`);
+  }
+  if (activePatients.length === 0) {
+    throw new Error('All patients are excluded; nothing to run.');
+  }
+
   credentials = readEnvPassword();
   await login();
 
-  console.log(`Posting mock readings for ${PATIENTS.length} patients to ${API_BASE}.`);
+  console.log(`Posting mock readings for ${activePatients.length} patients to ${API_BASE}.`);
   console.log('Press Ctrl+C to stop.\n');
 
-  for (const patient of PATIENTS) {
+  for (const patient of activePatients) {
     // Stagger the first post slightly so they don't all fire in the same tick.
     setTimeout(() => {
       postReading(patient);

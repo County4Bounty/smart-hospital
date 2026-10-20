@@ -46,7 +46,7 @@ Alert engine
 React dashboard
 ```
 
-A future AI component will analyze patient trends and provide assistive deterioration/risk insights.
+An AI component analyzes recent patient trends and provides assistive deterioration/risk insights (implemented as a small offline-trained model with Node-side inference — see §20a).
 
 The project is an academic prototype and is **not a certified medical device**.
 
@@ -115,7 +115,7 @@ The project is an academic prototype and is **not a certified medical device**.
                                                 │
                                                 ▼
                                       ┌────────────────────┐
-                                      │ Future AI Module   │
+                                      │ AI Risk Module     │
                                       │                    │
                                       │ Trend analysis     │
                                       │ Risk analysis      │
@@ -412,7 +412,7 @@ The exact configured values should always be taken from the implementation rathe
 Deterministic Alerts ≠ AI
 ```
 
-The deterministic alert engine must remain functional even if the future AI service is unavailable.
+The deterministic alert engine must remain functional even if the AI risk module is unavailable.
 
 AI must not replace emergency/threshold alert generation.
 
@@ -647,20 +647,53 @@ This makes the Wokwi simulation observable through the Serial Monitor.
 | MAX30102 physical reading             | 🟡 Pending physical hardware                                        |
 | DHT11 support                         | ⬜ Incomplete                                                        |
 | Login/logout + role-gated routing     | ✅ Implemented and manually verified (§11)                           |
-| Patient management                    | 🟡 Add/update UI appears wired in `main.jsx` — completeness/edge cases not re-verified this session |
-| User management                       | 🟡 `Users` view exists — completeness not re-verified this session  |
-| Threshold management UI                | 🟡 `Thresholds` view exists and calls backend — completeness not re-verified this session |
-| Full Socket.IO frontend verification  | ⬜ Not implemented                                                   |
-| Notification delivery                 | ⬜ Not implemented                                                   |
-| AI trend/risk analysis                | ⬜ Not implemented                                                   |
-| AI traceability/disclaimer            | ⬜ Not implemented                                                   |
-| Comprehensive testing                 | ⬜ Not completed                                                     |
+| Patient management                    | ✅ Admin add/update confirmed end-to-end (frontend + backend persist); known minor bug: age `0` rejected by frontend validation despite backend allowing it — trivial fix |
+| User management                       | 🟡 Read-only (list only, no create/edit) — acceptable gap given timeline unless required |
+| Threshold management UI                | ✅ Confirmed: persists and actually affects subsequent alert generation (not just a form) |
+| Full Socket.IO frontend verification  | ✅ Confirmed: new readings/alerts update the dashboard live with no manual refresh; reconnection refetches current state |
+| Notification path (dashboard)         | ✅ Alert → Socket.IO → visible open-alert count → acknowledge (persisted) → acknowledgement broadcast live to all clients (`alert.acknowledged`). No SMS/WhatsApp/sound — deliberately out of scope |
+| AI trend/risk analysis                | ✅ Implemented (§20a) — offline-trained logistic regression on synthetic data, Node-side inference |
+| AI traceability/disclaimer            | ✅ Implemented (§20a) — window, model version, generated time, factors, disclaimer |
+| Automated backend tests               | ✅ `node --test` suite against an isolated test database (login, readings→alerts, patient/device rules, auth rejection, AI endpoint, Python/Node parity) |
+| Full-system demo pass                 | ✅ Completed (login/roles, normal + abnormal alerts, live acknowledgement sync, ESP32 offline buffering/flush, AI trend demo, stale-data guard, device status, history chart, automated tests) |
 
 ---
 
-# 20. AI Feature — Planned
+# 20a. AI Risk Analysis — Implemented (prototype)
 
-AI is intentionally deferred until the core monitoring pipeline is stable.
+**What it is:** an assistive, explainable trend model. It does not replace deterministic alerts (§12) and the system works unchanged if it is unavailable.
+
+Pipeline (`backend/ai/`):
+
+* `generate_dataset.py` — simulates 400 patient episodes (stable, gradual deterioration, sudden spike, recovering) using the same normal ranges as `mock-multi-patient.js`. Fixed seed. **Synthetic data.**
+* Features per window of the last 12 readings (10 total): mean, population std and least-squares slope for HR, SpO₂ and temperature, plus count of readings beyond the alert thresholds.
+* Labels come from the scenario that generated each episode (stable/recovering → `low`, sudden spike → `moderate`, gradual deterioration → `high`), not from threshold rules. Train/test split is by episode (320/80, no overlap).
+* `train.py` — standardizes features and trains a multinomial `LogisticRegression`; exports `model.json` (scaler, coefficients, intercepts, `modelVersion` `synthetic-risk-logreg-v1`, metrics, synthetic-data description) and `parity_samples.json`.
+
+Held-out test metrics (synthetic data — shows the pipeline works, **not** clinical accuracy): accuracy 0.877; `high` F1 0.995; `low` F1 0.885; `moderate` F1 0.60 (recall 0.46). `moderate` is weak because many windows inside a spike episode contain no spike; sudden spikes are covered by the deterministic alert engine anyway.
+
+Runtime (Node only — no Python service during the demo):
+
+* `backend/src/aiRisk.js` replicates the Python feature extraction exactly (including 6-decimal rounding of features) and scores with the exported model. A parity test checks Node vs Python probabilities within 1e-6.
+* `GET /api/ai/risk/:patientId` (`requireAuth`) returns `status` (`ok` / `insufficient_data` / `stale`), `riskLevel`, probabilities, contributing factors, window, model version, generated time and disclaimer. Failures return 503 and cannot affect reading ingestion or alert generation.
+* Freshness/continuity guard: no prediction if the newest reading is older than 120 s, or if consecutive readings in the window are more than 60 s apart.
+* Contributing factors list only clinically meaningful directions (rising HR/temp, falling SpO₂, high variability, abnormal count); wording is deliberately neutral.
+
+UI (`AiInsights.jsx`): per-patient card with risk badge, probability (shown as >99% when saturated), factors, window, model version, generated time, auto-refresh every 20 s, stale/insufficient-data/unavailable states, and the disclaimer "AI-generated decision support. Not a diagnosis. Model trained on simulated data. Threshold alerts operate independently of this analysis."
+
+Meaning of `high`: a sustained deteriorating *trend* in recent readings, not a measure of current severity.
+
+Demo scripts: `mock-deterioration.js <patientId> [intervalMs]` simulates the gradual-deterioration process (same drift rates as training); `mock-multi-patient.js --exclude=P-1001` (or `EXCLUDE_PATIENTS`) lets the two run together without interleaving readings for one patient.
+
+Limitations to state openly: synthetic training data; no clinical validation; probabilities are uncalibrated model outputs; model is a small linear classifier.
+
+---
+
+# 20. AI Feature — Original Plan (historical; superseded by §20a)
+
+This section records the original plan. The feature is now implemented — **§20a is authoritative** for what exists. The potential inputs/outputs below were the design starting point, not a list of what is built.
+
+AI was originally deferred until the core monitoring pipeline was stable; that pipeline is now verified.
 
 The intended AI feature is:
 
@@ -724,7 +757,7 @@ The AI must remain architecturally separate from the deterministic alert engine.
 
 ---
 
-# 22. Planned AI Architecture
+# 22. AI Architecture (as designed; implemented per §20a)
 
 ```text
 MongoDB
@@ -742,9 +775,9 @@ Express Backend
 React Dashboard
 ```
 
-The exact AI/ML model has not yet been selected.
+The model selected and implemented is a multinomial logistic regression trained offline on synthetic data, with inference in Node (§20a); no LLM is used.
 
-Do not arbitrarily introduce an LLM or machine-learning model without first defining:
+Do not arbitrarily replace it with an LLM or another model, or retrain it, without first defining:
 
 * Prediction target
 * Available dataset
@@ -759,19 +792,21 @@ Do not arbitrarily introduce an LLM or machine-learning model without first defi
 
 Completed since the original roadmap was written: ESP32 offline buffering, device management, patient history/chart visualization, and login/logout with role-gated routing (§11).
 
+**Status (updated):** items 1–9 below are done (struck through). Remaining: item 10 — documentation/slides and demo rehearsal. No new features are planned.
+
 **Timeline constraint:** under one week to submission/viva as of this writing — the order below is deliberately scaled down accordingly (no full-size AI pipeline; a small, honest, offline-trained model with lightweight Node-side inference instead of a live Python service).
 
 Suggested remaining order:
 
-1. Verify/implement frontend real-time Socket.IO updates.
-2. Re-verify patient/user/threshold management completeness against actual requirements (currently only partially confirmed — see §19).
-3. Minimal notification workflow (visible dashboard alert → acknowledgement; no external SMS/WhatsApp).
-4. Automated integration tests for core endpoints (auth, readings, alerts, patient/device CRUD) — a regression safety net before AI work begins.
-5. Design AI features/data (from `mock-multi-patient.js`-style synthetic data, explicitly labeled as synthetic).
-6. Train + evaluate a small, explainable model (e.g. logistic regression / small decision tree) offline in Python/scikit-learn.
-7. Port the trained model's logic into the Node backend for inference — avoid a live cross-process Python service during the demo.
-8. AI Insights UI with traceability (risk, contributing factors, analysis window, model version, explicit "not a diagnosis" disclaimer).
-9. Full system testing pass: normal / abnormal / network-loss-buffering / AI-trend demo script.
+1. ~~Verify frontend real-time Socket.IO updates~~ — done, confirmed live (§19).
+2. ~~Re-verify patient/user/threshold management~~ — done; patients and thresholds confirmed working end-to-end, users confirmed read-only by design/acceptable gap (§19).
+3. ~~Minimal notification workflow (visible dashboard alert → acknowledgement; no external SMS/WhatsApp).~~ — done.
+4. ~~Automated integration tests for core endpoints (auth, readings, alerts, patient/device CRUD) — a regression safety net before AI work begins.~~ — done.
+5. ~~Design AI features/data (from `mock-multi-patient.js`-style synthetic data, explicitly labeled as synthetic).~~ — done.
+6. ~~Train + evaluate a small, explainable model (e.g. logistic regression / small decision tree) offline in Python/scikit-learn.~~ — done.
+7. ~~Port the trained model's logic into the Node backend for inference — avoid a live cross-process Python service during the demo.~~ — done.
+8. ~~AI Insights UI with traceability (risk, contributing factors, analysis window, model version, explicit "not a diagnosis" disclaimer).~~ — done.
+9. ~~Full system testing pass: normal / abnormal / network-loss-buffering / AI-trend demo script.~~ — done.
 10. Documentation, slides, and demo rehearsal — treat this as its own day, not an afterthought.
 
 Do not skip directly to AI if a prerequisite data pipeline is unreliable.
