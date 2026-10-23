@@ -426,7 +426,7 @@ function App() {
         {currentRoute === '#/alerts' && <Alerts alerts={alerts} onAcknowledge={acknowledgeAlert} />}
         {currentRoute === '#/ai' && <AiInsights api={api} patients={patients} />}
         {currentRoute === '#/about' && <About />}
-        {currentRoute === '#/users' && <Users />}
+        {currentRoute === '#/users' && <Users api={api} />}
         {currentRoute === '#/thresholds' && <Thresholds api={api} />}
         {currentRoute === '#/devices' && <Devices api={api} patients={patients} />}
       </section>
