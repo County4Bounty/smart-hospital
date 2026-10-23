@@ -4,8 +4,10 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const test = require('node:test');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const { createApp } = require('../src/app');
+const { jwtSecret } = require('../src/config');
 const { DEFAULT_THRESHOLD_DOCS, buildThresholdMapFromDocs, refreshThresholdCache } = require('../src/alertEngine');
 const { Alert, Device, HealthReading, Patient, Threshold, User } = require('../src/models');
 
@@ -98,6 +100,244 @@ test('POST /api/auth/login succeeds with valid credentials and rejects invalid c
     body: JSON.stringify({ email: 'integration-admin@test.local', password: 'wrong-password' })
   });
   assert.equal(invalid.status, 401);
+});
+
+test('admin user management creates safe users with normalized email and bcrypt password', async () => {
+  const response = await request('/api/users', {
+    method: 'POST',
+    headers: authHeaders(adminToken),
+    body: JSON.stringify({
+      name: '  Managed User  ',
+      email: '  Managed.User@TEST.LOCAL ',
+      password: 'ManagedPassword123!',
+      role: 'doctor',
+      passwordHash: 'ignored',
+      _id: 'ignored',
+      isActive: false
+    })
+  });
+  assert.equal(response.status, 201);
+  assert.deepEqual(Object.keys(response.body).sort(), ['email', 'id', 'isActive', 'name', 'role']);
+  assert.deepEqual(response.body, {
+    id: response.body.id,
+    name: 'Managed User',
+    email: 'managed.user@test.local',
+    role: 'doctor',
+    isActive: true
+  });
+  assert.equal(response.body.passwordHash, undefined);
+
+  const stored = await User.findById(response.body.id).select('+passwordHash').lean();
+  assert.equal(stored.email, 'managed.user@test.local');
+  assert.notEqual(stored.passwordHash, 'ignored');
+  assert.equal(await bcrypt.compare('ManagedPassword123!', stored.passwordHash), true);
+
+  const loginResponse = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: 'MANAGED.USER@TEST.LOCAL', password: 'ManagedPassword123!' })
+  });
+  assert.equal(loginResponse.status, 200);
+
+  const listing = await request('/api/users', { headers: authHeaders(adminToken) });
+  assert.equal(listing.status, 200);
+  const listedUser = listing.body.find((user) => user.email === 'managed.user@test.local');
+  assert.deepEqual(Object.keys(listedUser).sort(), ['email', 'id', 'isActive', 'name', 'role']);
+  assert.equal(listedUser.passwordHash, undefined);
+});
+
+test('user management rejects unauthorized callers, invalid fields, and unknown IDs', async () => {
+  const unauthenticatedPost = await request('/api/users', { method: 'POST', body: JSON.stringify({}) });
+  assert.equal(unauthenticatedPost.status, 401);
+  const unauthenticatedPatch = await request('/api/users/not-an-id', { method: 'PATCH', body: JSON.stringify({ name: 'Nope' }) });
+  assert.equal(unauthenticatedPatch.status, 401);
+
+  const invalidCallers = [nurseToken];
+  const bootstrap = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: process.env.BOOTSTRAP_USER_EMAIL, password: process.env.BOOTSTRAP_USER_PASSWORD })
+  });
+  assert.equal(bootstrap.status, 200);
+  invalidCallers.push(bootstrap.body.token);
+  for (const token of invalidCallers) {
+    const post = await request('/api/users', { method: 'POST', headers: authHeaders(token), body: JSON.stringify({}) });
+    assert.equal(post.status, 403);
+    const patch = await request('/api/users/not-an-id', { method: 'PATCH', headers: authHeaders(token), body: JSON.stringify({ name: 'Nope' }) });
+    assert.equal(patch.status, 403);
+  }
+
+  const invalidPayloads = [
+    { name: '', email: 'valid@test.local', password: 'ValidPassword123!', role: 'nurse' },
+    { name: 'Invalid', email: 'not-an-email', password: 'ValidPassword123!', role: 'nurse' },
+    { name: 'Invalid', email: 'invalid-role@test.local', password: 'ValidPassword123!', role: 'surgeon' },
+    { name: 'Invalid', email: 'short-password@test.local', password: 'short', role: 'nurse' }
+  ];
+  for (const payload of invalidPayloads) {
+    const response = await request('/api/users', { method: 'POST', headers: authHeaders(adminToken), body: JSON.stringify(payload) });
+    assert.equal(response.status, 400);
+  }
+
+  const target = await User.create({ name: 'Validation Target', email: 'validation-target@test.local', passwordHash: await bcrypt.hash('TargetPassword123!', 10), role: 'nurse' });
+  const invalidUpdates = [
+    { isActive: 'false' },
+    { role: 'invalid-role' },
+    { email: 'invalid-email' },
+    { name: '   ' },
+    { password: 'NewPassword123!' },
+    { passwordHash: 'ignored' },
+    { _id: new mongoose.Types.ObjectId().toString() }
+  ];
+  for (const updates of invalidUpdates) {
+    const response = await request(`/api/users/${target._id}`, { method: 'PATCH', headers: authHeaders(adminToken), body: JSON.stringify(updates) });
+    assert.equal(response.status, Object.keys(updates).some((key) => ['password', 'passwordHash', '_id'].includes(key)) ? 400 : 400);
+  }
+  const emptyPatch = await request(`/api/users/${target._id}`, { method: 'PATCH', headers: authHeaders(adminToken), body: JSON.stringify({}) });
+  assert.equal(emptyPatch.status, 400);
+
+  const malformed = await request('/api/users/not-an-object-id', { method: 'PATCH', headers: authHeaders(adminToken), body: JSON.stringify({ name: 'Nope' }) });
+  assert.equal(malformed.status, 400);
+  const unknown = await request(`/api/users/${new mongoose.Types.ObjectId()}`, { method: 'PATCH', headers: authHeaders(adminToken), body: JSON.stringify({ name: 'Nope' }) });
+  assert.equal(unknown.status, 404);
+  const bootstrapPatch = await request('/api/users/U-1', { method: 'PATCH', headers: authHeaders(adminToken), body: JSON.stringify({ role: 'admin' }) });
+  assert.equal(bootstrapPatch.status, 404);
+});
+
+test('user management handles duplicate emails and ignores extra patch fields', async () => {
+  const first = await request('/api/users', {
+    method: 'POST',
+    headers: authHeaders(adminToken),
+    body: JSON.stringify({ name: 'First Duplicate', email: 'duplicate@test.local', password: 'DuplicatePassword123!', role: 'nurse' })
+  });
+  assert.equal(first.status, 201);
+
+  const duplicate = await request('/api/users', {
+    method: 'POST',
+    headers: authHeaders(adminToken),
+    body: JSON.stringify({ name: 'Second Duplicate', email: ' DUPLICATE@TEST.LOCAL ', password: 'DuplicatePassword123!', role: 'nurse' })
+  });
+  assert.equal(duplicate.status, 409);
+
+  const second = await User.create({ name: 'Second User', email: 'second-user@test.local', passwordHash: await bcrypt.hash('SecondPassword123!', 10), role: 'nurse' });
+  const originalPasswordHash = second.passwordHash;
+  const update = await request(`/api/users/${second._id}`, {
+    method: 'PATCH',
+    headers: authHeaders(adminToken),
+    body: JSON.stringify({ email: ' DUPLICATE@TEST.LOCAL ', name: 'Updated Second', password: 'IgnoredPassword123!', passwordHash: 'ignored', _id: new mongoose.Types.ObjectId().toString() })
+  });
+  assert.equal(update.status, 409);
+
+  const safeUpdate = await request(`/api/users/${second._id}`, {
+    method: 'PATCH',
+    headers: authHeaders(adminToken),
+    body: JSON.stringify({ name: 'Updated Second', password: 'IgnoredPassword123!', passwordHash: 'ignored', _id: new mongoose.Types.ObjectId().toString() })
+  });
+  assert.equal(safeUpdate.status, 200);
+  assert.equal(safeUpdate.body.name, 'Updated Second');
+  const stored = await User.findById(second._id).select('+passwordHash').lean();
+  assert.equal(stored.passwordHash, originalPasswordHash);
+  assert.equal(stored.email, 'second-user@test.local');
+});
+
+test('deactivation and reactivation apply to an already-issued token', async () => {
+  const user = await User.create({ name: 'Lifecycle User', email: 'lifecycle@test.local', passwordHash: await bcrypt.hash('LifecyclePassword123!', 10), role: 'nurse' });
+  const token = await login('lifecycle@test.local', 'LifecyclePassword123!');
+
+  const deactivated = await request(`/api/users/${user._id}`, { method: 'PATCH', headers: authHeaders(adminToken), body: JSON.stringify({ isActive: false }) });
+  assert.equal(deactivated.status, 200);
+  assert.equal((await request('/api/patients', { headers: authHeaders(token) })).status, 401);
+  assert.equal((await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: 'lifecycle@test.local', password: 'LifecyclePassword123!' }) })).status, 403);
+
+  const reactivated = await request(`/api/users/${user._id}`, { method: 'PATCH', headers: authHeaders(adminToken), body: JSON.stringify({ isActive: true }) });
+  assert.equal(reactivated.status, 200);
+  assert.equal((await request('/api/patients', { headers: authHeaders(token) })).status, 200);
+});
+
+test('admins cannot demote or deactivate themselves and preserve another active admin', async () => {
+  const self = await User.create({ name: 'Self Admin', email: 'self-admin@test.local', passwordHash: await bcrypt.hash('SelfAdminPassword123!', 10), role: 'admin' });
+  const selfToken = await login('self-admin@test.local', 'SelfAdminPassword123!');
+  assert.equal((await request(`/api/users/${self._id}`, { method: 'PATCH', headers: authHeaders(selfToken), body: JSON.stringify({ role: 'nurse' }) })).status, 403);
+  assert.equal((await request(`/api/users/${self._id}`, { method: 'PATCH', headers: authHeaders(selfToken), body: JSON.stringify({ isActive: false }) })).status, 403);
+
+  const target = await User.create({ name: 'Second Admin', email: 'second-admin@test.local', passwordHash: await bcrypt.hash('SecondAdminPassword123!', 10), role: 'admin' });
+  const demoted = await request(`/api/users/${target._id}`, { method: 'PATCH', headers: authHeaders(selfToken), body: JSON.stringify({ role: 'nurse' }) });
+  assert.equal(demoted.status, 200);
+  const deactivationTarget = await User.create({ name: 'Third Admin', email: 'third-admin@test.local', passwordHash: await bcrypt.hash('ThirdAdminPassword123!', 10), role: 'admin' });
+  const deactivated = await request(`/api/users/${deactivationTarget._id}`, { method: 'PATCH', headers: authHeaders(selfToken), body: JSON.stringify({ isActive: false }) });
+  assert.equal(deactivated.status, 200);
+  assert.equal((await request('/api/users', { headers: authHeaders(selfToken) })).status, 200);
+});
+
+test('a MongoDB role change takes effect for an already-issued JWT', async () => {
+  const passwordHash = await bcrypt.hash('RoleChangePassword123!', 10);
+  const user = await User.create({ name: 'Role Change Admin', email: 'role-change@test.local', passwordHash, role: 'admin' });
+  const token = await login('role-change@test.local', 'RoleChangePassword123!');
+
+  await User.updateOne({ _id: user._id }, { $set: { role: 'nurse' } });
+  const response = await request('/api/users', { headers: authHeaders(token) });
+  assert.equal(response.status, 403);
+});
+
+test('inactive, missing-active-field, and deleted users are handled for existing JWTs', async () => {
+  const passwordHash = await bcrypt.hash('StatusPassword123!', 10);
+  const inactive = await User.create({ name: 'Inactive User', email: 'inactive-token@test.local', passwordHash, role: 'nurse' });
+  const inactiveToken = await login('inactive-token@test.local', 'StatusPassword123!');
+  await User.updateOne({ _id: inactive._id }, { $set: { isActive: false } });
+  const inactiveResponse = await request('/api/patients', { headers: authHeaders(inactiveToken) });
+  assert.equal(inactiveResponse.status, 401);
+
+  const legacy = await User.create({ name: 'Legacy User', email: 'legacy-user@test.local', passwordHash, role: 'nurse' });
+  await User.updateOne({ _id: legacy._id }, { $unset: { isActive: 1 } });
+  const legacyToken = await login('legacy-user@test.local', 'StatusPassword123!');
+  const legacyResponse = await request('/api/patients', { headers: authHeaders(legacyToken) });
+  assert.equal(legacyResponse.status, 200);
+  const legacyListing = await request('/api/users', { headers: authHeaders(adminToken) });
+  assert.equal(legacyListing.body.find((user) => user.email === 'legacy-user@test.local').isActive, true);
+
+  const deleted = await User.create({ name: 'Deleted User', email: 'deleted-user@test.local', passwordHash, role: 'nurse' });
+  const deletedToken = await login('deleted-user@test.local', 'StatusPassword123!');
+  await User.deleteOne({ _id: deleted._id });
+  const deletedResponse = await request('/api/patients', { headers: authHeaders(deletedToken) });
+  assert.equal(deletedResponse.status, 401);
+});
+
+test('inactive MongoDB users require a valid password before deactivation is disclosed', async () => {
+  const passwordHash = await bcrypt.hash('InactiveLoginPassword123!', 10);
+  await User.create({ name: 'Inactive Login User', email: 'inactive-login@test.local', passwordHash, role: 'nurse', isActive: false });
+
+  const wrongPassword = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: 'inactive-login@test.local', password: 'wrong-password' })
+  });
+  assert.equal(wrongPassword.status, 401);
+  assert.notEqual(wrongPassword.body.message, 'Account is deactivated');
+
+  const correctPassword = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: 'inactive-login@test.local', password: 'InactiveLoginPassword123!' })
+  });
+  assert.equal(correctPassword.status, 403);
+  assert.deepEqual(correctPassword.body, { message: 'Account is deactivated' });
+});
+
+test('bootstrap doctor remains a doctor and cannot access admin routes', async () => {
+  assert.ok(process.env.BOOTSTRAP_USER_EMAIL);
+  assert.ok(process.env.BOOTSTRAP_USER_PASSWORD);
+  const bootstrap = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: process.env.BOOTSTRAP_USER_EMAIL, password: process.env.BOOTSTRAP_USER_PASSWORD })
+  });
+  assert.equal(bootstrap.status, 200);
+  assert.equal(bootstrap.body.user.role, 'doctor');
+
+  const doctorRoute = await request('/api/patients', { headers: authHeaders(bootstrap.body.token) });
+  assert.equal(doctorRoute.status, 200);
+  const adminRoute = await request('/api/users', { headers: authHeaders(bootstrap.body.token) });
+  assert.equal(adminRoute.status, 403);
+});
+
+test('a signed token with a malformed non-ObjectId subject returns 401', async () => {
+  const token = jwt.sign({ sub: 'not-an-object-id', role: 'admin', name: 'Malformed' }, jwtSecret, { expiresIn: '8h' });
+  const response = await request('/api/users', { headers: authHeaders(token) });
+  assert.equal(response.status, 401);
 });
 
 test('POST /api/readings creates alerts for abnormal values but not normal values', async () => {

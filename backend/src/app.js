@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
+const mongoose = require('mongoose');
 const {
   validateReading,
   detectAlerts,
@@ -39,6 +41,40 @@ function serializeDevice(device, patientNames = new Map()) {
   };
 }
 
+const USER_ROLES = ['admin', 'doctor', 'nurse'];
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function serializeUser(user) {
+  const plainUser = user.toObject ? user.toObject() : user;
+  return {
+    id: plainUser._id.toString(),
+    name: plainUser.name,
+    email: plainUser.email,
+    role: plainUser.role,
+    isActive: plainUser.isActive !== false
+  };
+}
+
+function normalizeUserName(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeUserEmail(value) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function isValidEmail(email) {
+  return EMAIL_PATTERN.test(email);
+}
+
+function isDuplicateKeyError(error) {
+  return error?.code === 11000;
+}
+
+async function activeAdminCount() {
+  return User.countDocuments({ role: 'admin', isActive: { $ne: false } });
+}
+
 function createApp(io) {
   const app = express();
   app.use(cors());
@@ -46,9 +82,14 @@ function createApp(io) {
 
   app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'smart-hospital-api' }));
   app.post('/api/auth/login', async (req, res) => {
-    const session = await login(req.body.email, req.body.password);
-    if (!session) return res.status(401).json({ message: 'Invalid email or password' });
-    return res.json(session);
+    try {
+      const session = await login(req.body.email, req.body.password);
+      if (!session) return res.status(401).json({ message: 'Invalid email or password' });
+      return res.json(session);
+    } catch (error) {
+      if (error.statusCode === 403) return res.status(403).json({ message: 'Account is deactivated' });
+      return res.status(500).json({ message: 'Authentication service unavailable' });
+    }
   });
   app.get('/api/patients', requireAuth, async (_req, res) => res.json(await Patient.find().sort({ patientId: 1 }).lean()));
   app.get('/api/devices', requireAuth, async (_req, res) => {
@@ -181,8 +222,77 @@ function createApp(io) {
     return res.json(results.map(serializeAlert));
   });
   app.get('/api/users', requireAuth, requireRole('admin'), async (_req, res) => {
-    const users = await User.find({}).select('name email role').sort({ name: 1 }).lean();
-    return res.json(users.map((user) => ({ id: user._id.toString(), name: user.name, email: user.email, role: user.role })));
+    const users = await User.find({}).select('name email role isActive').sort({ name: 1 }).lean();
+    return res.json(users.map(serializeUser));
+  });
+  app.post('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
+    const name = normalizeUserName(req.body?.name);
+    const email = normalizeUserEmail(req.body?.email);
+    const { password, role } = req.body || {};
+    if (!name || !email || !isValidEmail(email) || typeof password !== 'string' || password.length < 8 || !USER_ROLES.includes(role)) {
+      return res.status(400).json({ message: 'Invalid user fields' });
+    }
+    if (await User.exists({ email })) return res.status(409).json({ message: 'Email already exists' });
+
+    try {
+      const user = await User.create({ name, email, passwordHash: await bcrypt.hash(password, 10), role, isActive: true });
+      return res.status(201).json(serializeUser(user));
+    } catch (error) {
+      if (isDuplicateKeyError(error)) return res.status(409).json({ message: 'Email already exists' });
+      throw error;
+    }
+  });
+  app.patch('/api/users/:id', requireAuth, requireRole('admin'), async (req, res) => {
+    if (req.params.id === 'U-1' || !mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(req.params.id === 'U-1' ? 404 : 400).json({ message: req.params.id === 'U-1' ? 'User not found' : 'Invalid user ID' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const updates = {};
+    if (req.body?.name !== undefined) {
+      updates.name = normalizeUserName(req.body.name);
+      if (!updates.name) return res.status(400).json({ message: 'Invalid user fields' });
+    }
+    if (req.body?.email !== undefined) {
+      updates.email = normalizeUserEmail(req.body.email);
+      if (!isValidEmail(updates.email)) return res.status(400).json({ message: 'Invalid user fields' });
+    }
+    if (req.body?.role !== undefined) {
+      if (!USER_ROLES.includes(req.body.role)) return res.status(400).json({ message: 'Invalid user fields' });
+      updates.role = req.body.role;
+    }
+    if (req.body?.isActive !== undefined) {
+      if (typeof req.body.isActive !== 'boolean') return res.status(400).json({ message: 'Invalid user fields' });
+      updates.isActive = req.body.isActive;
+    }
+    if (Object.keys(updates).length === 0) return res.status(400).json({ message: 'No valid user fields provided' });
+
+    const isSelf = req.user.sub === user._id.toString();
+    const isSelfDemotion = isSelf && updates.role !== undefined && updates.role !== 'admin';
+    const isSelfDeactivation = isSelf && updates.isActive === false;
+    if (isSelfDemotion || isSelfDeactivation) return res.status(403).json({ message: 'Admins cannot demote or deactivate themselves' });
+
+    const removesActiveAdmin = user.role === 'admin'
+      && user.isActive !== false
+      && ((updates.role !== undefined && updates.role !== 'admin') || updates.isActive === false);
+    if (removesActiveAdmin && await activeAdminCount() <= 1) {
+      return res.status(409).json({ message: 'At least one active admin is required' });
+    }
+
+    if (updates.email && await User.exists({ email: updates.email, _id: { $ne: user._id } })) {
+      return res.status(409).json({ message: 'Email already exists' });
+    }
+
+    Object.assign(user, updates);
+    try {
+      await user.save();
+      return res.json(serializeUser(user));
+    } catch (error) {
+      if (isDuplicateKeyError(error)) return res.status(409).json({ message: 'Email already exists' });
+      throw error;
+    }
   });
   app.get('/api/thresholds', requireAuth, async (_req, res) => {
     const thresholds = await Threshold.find({}).sort({ key: 1 }).lean();

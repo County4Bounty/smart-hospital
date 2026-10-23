@@ -33,7 +33,8 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true, lowercase: true },
   passwordHash: { type: String, required: true, select: false },
-  role: { type: String, enum: ['admin', 'doctor', 'nurse'], required: true }
+  role: { type: String, enum: ['admin', 'doctor', 'nurse'], required: true },
+  isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 
 const thresholdSchema = new mongoose.Schema({
