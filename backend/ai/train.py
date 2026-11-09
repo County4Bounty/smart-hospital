@@ -16,7 +16,7 @@ from generate_dataset import PATIENT_PROFILES, SEED, extract_features, generate_
 BASE_DIR = Path(__file__).parent
 DATASET_PATH = BASE_DIR / "dataset.json"
 MODEL_PATH = BASE_DIR / "model.json"
-MODEL_VERSION = "synthetic-risk-logreg-v1"
+MODEL_VERSION = "synthetic-risk-logreg-v2"
 PARITY_PATH = BASE_DIR / "parity_samples.json"
 
 
@@ -62,7 +62,23 @@ def build_parity_samples(scaler: StandardScaler, classifier: LogisticRegression)
 
 
 def main() -> None:
-    dataset, train_samples, test_samples = load_dataset()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out-dir", type=Path, default=BASE_DIR)
+    args = parser.parse_args()
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    dataset_path = args.out_dir / "dataset.json"
+    model_path = args.out_dir / "model.json"
+    parity_path = args.out_dir / "parity_samples.json"
+    dataset = json.loads(dataset_path.read_text(encoding="utf-8"))
+    train_samples = dataset["train"]
+    test_samples = dataset["test"]
+    train_episodes = {sample["episodeId"] for sample in train_samples}
+    test_episodes = {sample["episodeId"] for sample in test_samples}
+    overlap = train_episodes & test_episodes
+    if overlap:
+        raise ValueError(f"Episode leakage detected between train and test: {sorted(overlap)}")
     feature_names = dataset["metadata"]["featureNames"]
     x_train = [sample["features"] for sample in train_samples]
     y_train = [sample["label"] for sample in train_samples]
@@ -132,16 +148,16 @@ def main() -> None:
         "intercepts": classifier.intercept_.tolist(),
         "testMetrics": metrics,
     }
-    MODEL_PATH.write_text(json.dumps(exported_model, indent=2), encoding="utf-8")
-    print(f"Wrote model to {MODEL_PATH}")
+    model_path.write_text(json.dumps(exported_model, indent=2), encoding="utf-8")
+    print(f"Wrote model to {model_path}")
 
     parity_samples = {
         "modelVersion": MODEL_VERSION,
         "classNames": class_names,
         "samples": build_parity_samples(scaler, classifier),
     }
-    PARITY_PATH.write_text(json.dumps(parity_samples, indent=2), encoding="utf-8")
-    print(f"Wrote {len(parity_samples['samples'])} parity samples to {PARITY_PATH}")
+    parity_path.write_text(json.dumps(parity_samples, indent=2), encoding="utf-8")
+    print(f"Wrote {len(parity_samples['samples'])} parity samples to {parity_path}")
 
 
 if __name__ == "__main__":

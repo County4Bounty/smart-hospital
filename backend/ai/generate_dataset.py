@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import random
+import argparse
 from pathlib import Path
 
 SEED = 20241015
@@ -13,6 +14,13 @@ READINGS_PER_EPISODE = 60
 READING_INTERVAL_SECONDS = 5
 WINDOW_SIZE = 12
 TEST_EPISODE_FRACTION = 0.2
+SPIKE_START_INDEX = 36
+SPIKE_LENGTH = 12
+DRIFT_ONSET_INDEX = 0
+DRIFT_MODERATE_AFTER_STEPS = 12
+DRIFT_HIGH_AFTER_STEPS = 36
+RECOVERY_START_INDEX = 12
+MIN_ABNORMAL_READINGS_FOR_MODERATE = 4
 
 # These ranges and abnormal values mirror backend/scripts/mock-multi-patient.js.
 PATIENT_PROFILES = [
@@ -135,10 +143,10 @@ def extract_features(window: list[dict[str, float | int]]) -> list[float]:
 
 
 def episode_samples(episode_id: str, scenario: str, readings: list[dict[str, float | int]]) -> list[dict]:
-    label = SCENARIO_TO_RISK[scenario]
     samples = []
     for end_index in range(WINDOW_SIZE - 1, len(readings)):
         window = readings[end_index - WINDOW_SIZE + 1 : end_index + 1]
+        label = window_label(scenario, end_index)
         samples.append(
             {
                 "episodeId": episode_id,
@@ -151,7 +159,35 @@ def episode_samples(episode_id: str, scenario: str, readings: list[dict[str, flo
     return samples
 
 
+def window_label(scenario: str, end_index: int) -> str:
+    window_start = end_index - WINDOW_SIZE + 1
+    window_end = end_index
+
+    if scenario == "stable":
+        return "low"
+    if scenario == "sudden_spike":
+        spike_end = SPIKE_START_INDEX + SPIKE_LENGTH - 1
+        overlap_start = max(window_start, SPIKE_START_INDEX)
+        overlap_end = min(window_end, spike_end)
+        spike_reading_count = max(0, overlap_end - overlap_start + 1)
+        return "moderate" if spike_reading_count >= MIN_ABNORMAL_READINGS_FOR_MODERATE else "low"
+    if scenario == "gradual_deterioration":
+        drift_progress = max(0, window_end - DRIFT_ONSET_INDEX + 1)
+        if drift_progress < DRIFT_MODERATE_AFTER_STEPS:
+            return "low"
+        if drift_progress < DRIFT_HIGH_AFTER_STEPS:
+            return "moderate"
+        return "high"
+    if scenario == "recovering":
+        recovery_reading_count = max(0, min(window_end, RECOVERY_START_INDEX - 1) - window_start + 1)
+        return "moderate" if recovery_reading_count >= MIN_ABNORMAL_READINGS_FOR_MODERATE else "low"
+    raise ValueError(f"Unknown scenario: {scenario}")
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out-dir", type=Path, default=Path(__file__).parent)
+    args = parser.parse_args()
     rng = random.Random(SEED)
     scenarios = list(SCENARIO_TO_RISK)
     episodes = []
@@ -181,6 +217,12 @@ def main() -> None:
             "windowSize": WINDOW_SIZE,
             "featureNames": FEATURE_NAMES,
             "scenarioToRisk": SCENARIO_TO_RISK,
+            "windowLabelRules": {
+                "stable": "All windows are low.",
+                "sudden_spike": f"Moderate when a window contains at least {MIN_ABNORMAL_READINGS_FOR_MODERATE} of the {SPIKE_LENGTH} spike readings starting at index {SPIKE_START_INDEX}; otherwise low.",
+                "gradual_deterioration": f"Low before {DRIFT_MODERATE_AFTER_STEPS} drift steps, moderate through {DRIFT_HIGH_AFTER_STEPS - 1} steps, and high from {DRIFT_HIGH_AFTER_STEPS} drift steps onward.",
+                "recovering": f"Moderate while a window contains at least {MIN_ABNORMAL_READINGS_FOR_MODERATE} pre-recovery abnormal readings; otherwise low after recovery progresses.",
+            },
             "description": "Synthetic patient episodes for offline ML pipeline development; not clinical data.",
         },
         "train": [
@@ -195,7 +237,8 @@ def main() -> None:
         ],
     }
 
-    output_path = Path(__file__).with_name("dataset.json")
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    output_path = args.out_dir / "dataset.json"
     output_path.write_text(json.dumps(dataset, indent=2), encoding="utf-8")
     print(f"Generated {len(episodes)} episodes: {len(train_episodes)} train, {len(test_episodes)} test")
     print(f"Wrote {len(dataset['train'])} train windows and {len(dataset['test'])} test windows to {output_path}")
